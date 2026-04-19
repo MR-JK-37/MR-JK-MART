@@ -5,6 +5,7 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
+import { compressFile } from '../../utils/fileCompression';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const platforms = ['Windows', 'Mac', 'Linux', 'Android', 'iOS', 'Web'];
@@ -20,9 +21,11 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
     fileName: '', fileSize: '', showLikes: true, showComments: true,
     published: true, manualSteps: [],
+    compressed: false, originalSize: 0, compressedSize: 0, compressionRatio: 0
   });
 
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState('idle'); // idle, reading, compressing
   const [fileTier, setFileTier] = useState(0);
   const urlInputRef = useRef(null);
 
@@ -46,6 +49,10 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         showComments: editApp.showComments !== false,
         published: editApp.published !== false,
         manualSteps: editApp.manualSteps || [],
+        compressed: editApp.compressed || false,
+        originalSize: editApp.originalSize || 0,
+        compressedSize: editApp.compressedSize || 0,
+        compressionRatio: editApp.compressionRatio || 0,
       });
       let initialTier = 0;
       if (editApp.fileData) initialTier = 1;
@@ -58,10 +65,12 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
         fileName: '', fileSize: '', showLikes: true, showComments: true,
         published: true, manualSteps: [],
+        compressed: false, originalSize: 0, compressedSize: 0, compressionRatio: 0
       });
       setFileTier(0);
     }
     setUploadProgress(null);
+    setUploadStatus('idle');
   }, [editApp, isOpen]);
 
   const handleChange = (field, value) => {
@@ -152,6 +161,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       }
     }
 
+    setUploadStatus('reading');
     setUploadProgress(0);
     const reader = new FileReader();
     reader.onprogress = (evt) => {
@@ -160,11 +170,29 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         setUploadProgress(percent);
       }
     };
-    reader.onload = () => {
-      handleChange('fileData', reader.result); // Store ArrayBuffer!
-      handleChange('fileHandle', null);
+    reader.onload = async () => {
+      setUploadStatus('compressing');
+      setUploadProgress(null);
+      const arrayBuffer = reader.result;
+      
+      const result = await compressFile(arrayBuffer);
+      
+      setForm(prev => ({
+        ...prev,
+        fileData: result.data,
+        fileHandle: null,
+        compressed: result.compressed,
+        originalSize: result.originalSize,
+        compressedSize: result.compressedSize,
+        compressionRatio: result.compressionRatio
+      }));
+      
+      setUploadStatus('done');
       setUploadProgress(100);
-      setTimeout(() => setUploadProgress(null), 1000);
+      setTimeout(() => {
+        setUploadProgress(null);
+        setUploadStatus('idle');
+      }, 1500);
     };
     reader.readAsArrayBuffer(file);
   };
@@ -174,8 +202,16 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     handleChange('fileHandle', null);
     handleChange('fileName', '');
     handleChange('fileSize', '');
+    setForm(prev => ({
+      ...prev,
+      compressed: false,
+      originalSize: 0,
+      compressedSize: 0,
+      compressionRatio: 0
+    }));
     setFileTier(0);
     setUploadProgress(null);
+    setUploadStatus('idle');
   };
 
   const togglePlatform = (p) => {
@@ -364,24 +400,40 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
               </div>
 
               {/* Status Badge */}
-              <div className="mt-2 z-10 flex">
+              <div className="mt-2 z-10 flex flex-wrap gap-2">
                 {fileTier === 1 && <span className="glass-pill bg-green-500/20 text-green-300 text-[10px] font-bold tracking-wide uppercase px-3">Stored locally</span>}
                 {fileTier === 2 && <span className="glass-pill bg-yellow-500/20 text-yellow-300 text-[10px] font-bold tracking-wide uppercase px-3">Large file — use URL recommended</span>}
                 {fileTier === 3 && <span className="glass-pill bg-red-500/20 text-red-300 text-[10px] font-bold tracking-wide uppercase px-3">Too large — URL required</span>}
+                {form.compressed && (
+                  <span className="glass-pill bg-blue-500/20 text-blue-300 text-[10px] font-bold px-3">
+                    Original: {formatFileSize(form.originalSize)} → Stored: {formatFileSize(form.compressedSize)} (saved {form.compressionRatio}%)
+                  </span>
+                )}
               </div>
 
               {/* Animated Progress Bar */}
-              {uploadProgress !== null && uploadProgress < 100 && fileTier === 1 && (
+              {(uploadStatus === 'reading' || uploadStatus === 'compressing') && fileTier === 1 && (
                 <div className="mt-3 z-10">
-                  <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-                    <motion.div 
-                      className="h-full gradient-bg" 
-                      initial={{ width: 0 }}
-                      animate={{ width: `${uploadProgress}%` }} 
-                      transition={{ ease: "easeOut", duration: 0.2 }}
-                    />
+                  <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
+                    {uploadStatus === 'reading' ? (
+                      <motion.div 
+                        className="h-full gradient-bg" 
+                        initial={{ width: 0 }}
+                        animate={{ width: `${uploadProgress}%` }} 
+                        transition={{ ease: "easeOut", duration: 0.2 }}
+                      />
+                    ) : (
+                      <motion.div 
+                        className="h-full bg-blue-400 absolute left-0" 
+                        initial={{ left: '-100%', width: '100%' }}
+                        animate={{ left: '100%' }} 
+                        transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                      />
+                    )}
                   </div>
-                  <div className="text-xs opacity-60 mt-1.5 font-mono">Reading file... {Math.round(uploadProgress)}%</div>
+                  <div className="text-xs opacity-60 mt-1.5 font-mono">
+                    {uploadStatus === 'reading' ? `Reading file... ${Math.round(uploadProgress)}%` : 'Compressing file (gzip)...'}
+                  </div>
                 </div>
               )}
             </div>

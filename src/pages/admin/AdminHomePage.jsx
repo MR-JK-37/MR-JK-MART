@@ -12,18 +12,30 @@ export default function AdminHomePage() {
   const { apps, fetchApps } = useAppStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [stats, setStats] = useState({ apps: 0, downloads: 0, comments: 0, contacts: 0 });
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchApps();
-    loadStats();
+    const init = async () => {
+      try {
+        await fetchApps();
+        const commentsCount = await getAllCommentsCount();
+        const unreadContacts = await getUnreadContactCount();
+        setStats(prev => ({ ...prev, comments: commentsCount, contacts: unreadContacts }));
+      } catch (err) {
+        console.error('DB Error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    init();
   }, []);
 
-  const loadStats = async () => {
-    const commentsCount = await getAllCommentsCount();
-    const unreadContacts = await getUnreadContactCount();
-    setStats(prev => ({ ...prev, comments: commentsCount, contacts: unreadContacts }));
-  };
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center pt-20">
+      <div className="loader-ring" />
+    </div>
+  );
 
   useEffect(() => {
     const totalDownloads = apps.reduce((sum, app) => sum + (app.downloadCount || 0), 0);

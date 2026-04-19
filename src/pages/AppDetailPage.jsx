@@ -6,6 +6,7 @@ import DOMPurify from 'dompurify';
 import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
 import { getApp, incrementDownloadCount, getCommentsByApp, addComment, updateComment, deleteComment } from '../db/database';
+import { decompressFile } from '../utils/fileCompression';
 import GlassCard from '../components/ui/GlassCard';
 import GlassButton from '../components/ui/GlassButton';
 import PreviewLightbox from '../components/apps/PreviewLightbox';
@@ -19,6 +20,7 @@ export default function AppDetailPage() {
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState('idle'); // idle, preparing, decompressing, done
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -61,10 +63,24 @@ export default function AppDetailPage() {
   const handleDownload = async () => {
     if (!app) return;
     setDownloading(true);
-    await incrementDownloadCount(app.id);
+    setDownloadStatus('preparing');
+
+    if (app.downloadUrl) {
+      window.open(app.downloadUrl, '_blank');
+      await incrementDownloadCount(app.id);
+      setDownloading(false);
+      setDownloadStatus('idle');
+      return;
+    }
 
     if (app.fileData instanceof ArrayBuffer) {
-      const blob = new Blob([app.fileData], { type: 'application/octet-stream' });
+      let finalBuffer = app.fileData;
+      if (app.compressed) {
+        setDownloadStatus('decompressing');
+        finalBuffer = await decompressFile(app.fileData);
+      }
+      
+      const blob = new Blob([finalBuffer], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -73,6 +89,8 @@ export default function AppDetailPage() {
       link.click();
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 2000);
+      
+      await incrementDownloadCount(app.id);
     } else if (typeof app.fileData === 'string' && app.fileData.startsWith('data:')) {
       const link = document.createElement('a');
       link.href = app.fileData;
@@ -80,6 +98,7 @@ export default function AppDetailPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      await incrementDownloadCount(app.id);
     } else if (app.fileHandle) {
       try {
         const file = await app.fileHandle.getFile();
@@ -91,19 +110,20 @@ export default function AppDetailPage() {
         link.click();
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(url), 2000);
+        await incrementDownloadCount(app.id);
       } catch (err) {
         toast.error('Failed to read from local file system handle.');
       }
-    } else if (app.downloadUrl) {
-      window.open(app.downloadUrl, '_blank');
     } else {
       toast.info('No download available for this app');
     }
 
+    setDownloadStatus('done');
     setTimeout(() => {
       setDownloading(false);
+      setDownloadStatus('idle');
       toast.success('Download started! 🎉');
-    }, 1000);
+    }, 1500);
   };
 
   const handleLike = () => {
@@ -212,12 +232,25 @@ export default function AppDetailPage() {
                 disabled={downloading}
                 className="flex items-center gap-3 text-base px-8 py-3"
               >
-                {downloading ? (
+                {downloadStatus === 'preparing' && (
                   <>
                     <div className="loader-ring" style={{ width: 18, height: 18, borderWidth: 2 }} />
-                    Downloading...
+                    Preparing...
                   </>
-                ) : (
+                )}
+                {downloadStatus === 'decompressing' && (
+                  <>
+                    <span className="animate-spin">🔄</span>
+                    Decompressing...
+                  </>
+                )}
+                {downloadStatus === 'done' && (
+                  <>
+                    <span>✅</span>
+                    Downloaded!
+                  </>
+                )}
+                {downloadStatus === 'idle' && (
                   <>
                     <div className="flex items-center gap-2">
                       <Download size={20} />
