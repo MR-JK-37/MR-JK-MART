@@ -9,6 +9,7 @@ import { uploadImage, uploadMultipleImages, uploadAppFile, formatFileSize } from
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
+const MAX_RAW_SIZE = 10 * 1024 * 1024; // 10MB Cloudinary Free Limit
 const PLATFORMS = [
   { id: 'windows', label: 'Windows', icon: '🪟' },
   { id: 'mac',     label: 'Mac',     icon: '🍎' },
@@ -46,6 +47,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   const [uploadMode, setUploadMode] = useState('url'); // 'file' or 'url'
   const [uploadedFileUrl, setUploadedFileUrl] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
+  const [fileError, setFileError] = useState('');
   const urlInputRef = useRef(null);
 
   useEffect(() => {
@@ -91,6 +93,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     setUploadMode(editApp?.downloadUrl ? 'url' : 'url'); // Default to URL for now
     setExternalUrl(editApp?.downloadUrl || '');
     setUploadedFileUrl('');
+    setFileError('');
   }, [editApp, isOpen]);
 
   const handleChange = (field, value) => {
@@ -161,6 +164,12 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   };
 
   const handleFileSelect = (file) => {
+    setFileError('');
+    if (file.size > MAX_RAW_SIZE) {
+      setFileError('File size exceeds Cloudinary 10MB limit for free accounts.');
+      // Don't set the file, force user to see the error
+      return;
+    }
     setForm(prev => ({ ...prev, appFile: file }));
     // Auto-fill filename and size
     handleChange('fileName', file.name);
@@ -241,7 +250,11 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       return;
     }
     if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
-      toast.error('Please select a file to upload');
+      if (fileError) {
+        toast.error('This file is too large for direct upload. Please use a URL.');
+      } else {
+        toast.error('Please select a file to upload');
+      }
       return;
     }
 
@@ -543,7 +556,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
               <div>
                 
                 {/* Drop zone */}
-                {uploadStatus === 'idle' && !form.appFile && (
+                {uploadStatus === 'idle' && !form.appFile && !fileError && (
                   <label style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -590,7 +603,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        or click to browse • Any file type supported
+                        Max 10MB for direct upload
                       </p>
                     </div>
                     <span style={{
@@ -614,6 +627,59 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
                       }}
                     />
                   </label>
+                )}
+
+                {/* File too large error */}
+                {fileError && (
+                  <div style={{
+                    padding: '24px',
+                    background: 'rgba(239,68,68,0.1)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    borderRadius: '16px',
+                    textAlign: 'center',
+                  }}>
+                    <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
+                    <h4 style={{ color: '#f87171', margin: '0 0 8px', fontSize: '15px' }}>File Too Large</h4>
+                    <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
+                      Cloudinary Free only supports uploads up to <b>10MB</b> for non-media files. Your file is larger.
+                    </p>
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => setFileError('')}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          background: 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          color: 'white',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Try smaller file
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFileError('');
+                          setUploadMode('url');
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          background: '#7c3aed',
+                          border: 'none',
+                          color: 'white',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Use External URL 🔗
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {/* File selected — show info */}
