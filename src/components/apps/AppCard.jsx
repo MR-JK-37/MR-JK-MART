@@ -7,7 +7,9 @@ import GlassCard from '../ui/GlassCard';
 
 export default function AppCard({ app, index = 0 }) {
   const navigate = useNavigate();
-  const { isAdmin, deleteApp, setPageLoading } = useAppStore();
+  const isAdmin = useAppStore(s => s.isAdmin);
+  const deleteApp = useAppStore(s => s.deleteApp);
+  const setPageLoading = useAppStore(s => s.setPageLoading);
   const [showMenu, setShowMenu] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 

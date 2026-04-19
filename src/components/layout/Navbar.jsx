@@ -18,7 +18,10 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
-  const { theme, toggleTheme, isAdmin, logout } = useAppStore();
+  const theme = useAppStore(s => s.theme);
+  const toggleTheme = useAppStore(s => s.toggleTheme);
+  const isAdmin = useAppStore(s => s.isAdmin);
+  const logout = useAppStore(s => s.logout);
 
   useEffect(() => {
     const handleScroll = () => {

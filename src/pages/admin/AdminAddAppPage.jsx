@@ -7,7 +7,7 @@ import AddEditAppModal from '../../components/admin/AddEditAppModal';
 export default function AdminAddAppPage() {
   const { appId } = useParams();
   const navigate = useNavigate();
-  const { getAppById } = useAppStore();
+  const getAppById = useAppStore(s => s.getAppById);
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(!!appId);
 

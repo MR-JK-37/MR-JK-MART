@@ -14,7 +14,7 @@ import UserManualSection from '../components/apps/UserManualSection';
 
 export default function AppDetailPage() {
   const { appId } = useParams();
-  const { isAdmin } = useAppStore();
+  const isAdmin = useAppStore(s => s.isAdmin);
   const toast = useToastStore();
 
   const [app, setApp] = useState(null);

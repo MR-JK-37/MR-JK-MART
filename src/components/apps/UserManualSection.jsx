@@ -5,7 +5,7 @@ import useAppStore from '../../store/useAppStore';
 
 export default function UserManualSection({ steps = [], onEdit, onDelete }) {
   const [selectedStep, setSelectedStep] = useState(null);
-  const { isAdmin } = useAppStore();
+  const isAdmin = useAppStore(s => s.isAdmin);
 
   if (!steps || steps.length === 0) return null;
 

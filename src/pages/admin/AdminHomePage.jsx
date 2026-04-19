@@ -9,38 +9,69 @@ import AddEditAppModal from '../../components/admin/AddEditAppModal';
 import GlassCard from '../../components/ui/GlassCard';
 
 export default function AdminHomePage() {
-  const { apps, fetchApps } = useAppStore();
+  const [apps, setApps] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [stats, setStats] = useState({ apps: 0, downloads: 0, comments: 0, contacts: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const db = await import('../../db/database').then(m => m.getDB());
+      const [allApps, allContacts] = await Promise.all([
+        db.getAll('apps'),
+        db.getAll('contacts'),
+      ]);
+      const commentsCount = await import('../../db/database').then(m => m.getAllCommentsCount());
+      const unreadContacts = await import('../../db/database').then(m => m.getUnreadContactCount());
+      
+      const appsList = allApps || [];
+      setApps(appsList);
+      setContacts(allContacts || []);
+      
+      const totalDownloads = appsList.reduce((sum, app) => sum + (app.downloadCount || 0), 0);
+      setStats({ apps: appsList.length, downloads: totalDownloads, comments: commentsCount, contacts: unreadContacts });
+    } catch (err) {
+      console.error('AdminHomePage load error:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const init = async () => {
-      try {
-        await fetchApps();
-        const commentsCount = await getAllCommentsCount();
-        const unreadContacts = await getUnreadContactCount();
-        setStats(prev => ({ ...prev, comments: commentsCount, contacts: unreadContacts }));
-      } catch (err) {
-        console.error('DB Error:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
+    loadData();
   }, []);
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center pt-20">
-      <div className="loader-ring" />
-    </div>
-  );
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading admin panel...</p>
+        </div>
+      </div>
+    );
+  }
 
-  useEffect(() => {
-    const totalDownloads = apps.reduce((sum, app) => sum + (app.downloadCount || 0), 0);
-    setStats(prev => ({ ...prev, apps: apps.length, downloads: totalDownloads }));
-  }, [apps]);
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center p-8">
+          <p className="text-red-400 text-xl mb-4">Failed to load: {error}</p>
+          <button 
+            onClick={loadData}
+            className="px-6 py-3 bg-violet-600 rounded-xl text-white hover:bg-violet-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <motion.div

@@ -19,17 +19,14 @@ import AdminContactsPage from './pages/admin/AdminContactsPage';
 
 import React, { useState } from 'react';
 
-function ProtectedRoute({ children }) {
+export function ProtectedRoute({ children }) {
   const isAdmin = useAppStore(s => s.isAdmin);
-  const [checked, setChecked] = useState(false);
   
-  useEffect(() => {
-    setChecked(true);
-  }, []);
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
   
-  if (!checked) return <PageLoader />;
-  if (!isAdmin) return <Navigate to="/" replace />;
-  return children;
+  return <>{children}</>;
 }
 
 class AdminErrorBoundary extends React.Component {
@@ -100,7 +97,9 @@ function AnimatedRoutes() {
 }
 
 export default function App() {
-  const { theme, setTheme, pageLoading } = useAppStore();
+  const theme = useAppStore(s => s.theme);
+  const setTheme = useAppStore(s => s.setTheme);
+  const pageLoading = useAppStore(s => s.pageLoading);
 
   useEffect(() => {
     // Initialize theme

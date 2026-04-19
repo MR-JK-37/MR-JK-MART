@@ -10,7 +10,7 @@ import useToastStore from '../store/useToastStore';
 import { addContact, getSetting, setSetting } from '../db/database';
 
 export default function ContactPage() {
-  const { isAdmin } = useAppStore();
+  const isAdmin = useAppStore(s => s.isAdmin);
   const toast = useToastStore();
   const [showAdminGate, setShowAdminGate] = useState(false);
   const [showSocialEdit, setShowSocialEdit] = useState(false);

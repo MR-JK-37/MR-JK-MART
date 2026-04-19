@@ -5,6 +5,7 @@ export default defineConfig({
   base: '/MR-JK-MART/',
   plugins: [react()],
   build: {
-    outDir: 'dist'
+    outDir: 'dist',
+    sourcemap: true
   }
 })

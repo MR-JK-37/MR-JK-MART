@@ -11,7 +11,8 @@ const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const platforms = ['Windows', 'Mac', 'Linux', 'Android', 'iOS', 'Web'];
 
 export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
-  const { addApp, updateApp } = useAppStore();
+  const addApp = useAppStore(s => s.addApp);
+  const updateApp = useAppStore(s => s.updateApp);
   const toast = useToastStore();
   const [loading, setLoading] = useState(false);
 

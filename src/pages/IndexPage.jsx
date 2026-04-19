@@ -5,7 +5,9 @@ import useAppStore from '../store/useAppStore';
 import AppGrid from '../components/apps/AppGrid';
 
 export default function IndexPage() {
-  const { apps, fetchApps, loading } = useAppStore();
+  const apps = useAppStore(s => s.apps);
+  const fetchApps = useAppStore(s => s.fetchApps);
+  const loading = useAppStore(s => s.loading);
 
   useEffect(() => {
     fetchApps();

@@ -8,7 +8,8 @@ import GlassCard from '../components/ui/GlassCard';
 export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const { apps, fetchApps } = useAppStore();
+  const apps = useAppStore(s => s.apps);
+  const fetchApps = useAppStore(s => s.fetchApps);
   const navigate = useNavigate();
 
   useEffect(() => {
