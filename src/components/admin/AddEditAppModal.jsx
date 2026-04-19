@@ -8,7 +8,14 @@ import useToastStore from '../../store/useToastStore';
 import { uploadFile, addApp as dbAddApp, updateApp as dbUpdateApp } from '../../firebase/services';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
-const platforms = ['Windows', 'Mac', 'Linux', 'Android', 'iOS', 'Web'];
+const PLATFORMS = [
+  { id: 'windows', label: 'Windows', icon: '🪟' },
+  { id: 'mac',     label: 'Mac',     icon: '🍎' },
+  { id: 'linux',   label: 'Linux',   icon: '🐧' },
+  { id: 'android', label: 'Android', icon: '🤖' },
+  { id: 'ios',     label: 'iOS',     icon: '📱' },
+  { id: 'web',     label: 'Web',     icon: '🌐' },
+];
 
 export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   const addApp = useAppStore(s => s.addApp);
@@ -135,14 +142,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     setFileTier(0);
   };
 
-  const togglePlatform = (p) => {
-    setForm(prev => ({
-      ...prev,
-      platform: prev.platform.includes(p)
-        ? prev.platform.filter(x => x !== p)
-        : [...prev.platform, p],
-    }));
-  };
+
 
   // Manual Steps
   const [showStepForm, setShowStepForm] = useState(false);
@@ -319,21 +319,89 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
 
         {/* Platform Tags */}
         <div>
-          <label className="block text-xs font-medium opacity-60 mb-2">Platforms</label>
-          <div className="flex flex-wrap gap-2">
-            {platforms.map(p => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => togglePlatform(p)}
-                className={`glass-pill text-xs transition-all ${
-                  form.platform.includes(p) ? 'active' : ''
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+          <label style={{
+            display: 'block',
+            marginBottom: '10px',
+            fontSize: '14px',
+            color: 'rgba(255,255,255,0.7)',
+            fontWeight: '500'
+          }}>
+            Platforms
+          </label>
+          
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '10px',
+          }}>
+            {PLATFORMS.map(({ id, label, icon }) => {
+              // Be flexible for old apps that might have saved 'Windows' vs 'windows'
+              const isSelected = form.platform.includes(id) || form.platform.includes(label);
+              
+              const toggleSelected = () => {
+                setForm(prev => {
+                  const hasIt = prev.platform.includes(id) || prev.platform.includes(label);
+                  return {
+                    ...prev,
+                    platform: hasIt
+                      ? prev.platform.filter(x => x !== id && x !== label)
+                      : [...prev.platform, id]
+                  };
+                });
+              };
+
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={toggleSelected}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '999px',
+                    border: isSelected
+                      ? '2px solid #7c3aed'
+                      : '1px solid rgba(255,255,255,0.2)',
+                    background: isSelected
+                      ? 'linear-gradient(135deg, rgba(124,58,237,0.35), rgba(6,182,212,0.25))'
+                      : 'rgba(255,255,255,0.06)',
+                    color: isSelected ? '#e2e8f0' : 'rgba(255,255,255,0.5)',
+                    fontSize: '14px',
+                    fontWeight: isSelected ? '600' : '400',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    backdropFilter: 'blur(8px)',
+                    transform: isSelected ? 'scale(1.05)' : 'scale(1)',
+                    boxShadow: isSelected
+                      ? '0 0 12px rgba(124,58,237,0.4)'
+                      : 'none',
+                  }}
+                >
+                  <span style={{ fontSize: '16px' }}>{icon}</span>
+                  {label}
+                  {isSelected && (
+                    <span style={{
+                      marginLeft: '2px',
+                      fontSize: '12px',
+                      color: '#06b6d4'
+                    }}>✓</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
+
+          {form.platform.length > 0 && (
+            <p style={{
+              marginTop: '8px',
+              fontSize: '12px',
+              color: 'rgba(124,58,237,0.8)'
+            }}>
+              ✅ Selected: {form.platform.join(', ')}
+            </p>
+          )}
         </div>
 
         {/* Icon */}
