@@ -5,7 +5,9 @@ import { Download, Heart, Share2, MessageCircle, Calendar, HardDrive, Monitor, T
 import DOMPurify from 'dompurify';
 import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
-import { getApp, incrementDownloadCount, getCommentsByApp, addComment, updateComment, deleteComment } from '../db/database';
+import { getAppById, incrementDownload, getComments, addComment, hideComment, deleteComment } from '../firebase/services';
+import { updateDoc, doc, increment } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import { decompressFile } from '../utils/fileCompression';
 import GlassCard from '../components/ui/GlassCard';
 import GlassButton from '../components/ui/GlassButton';
@@ -44,19 +46,19 @@ export default function AppDetailPage() {
 
   const loadApp = async () => {
     setLoading(true);
-    const data = await getApp(Number(appId));
+    const data = await getAppById(appId);
     setApp(data);
-    setLikeCount(data?.downloadCount || 0); // Using download count as proxy
+    setLikeCount(data?.likeCount || 0);
     setLoading(false);
   };
 
   const loadLikeState = () => {
-    const likes = JSON.parse(localStorage.getItem('mrjk-likes') || '{}');
-    setLiked(!!likes[appId]);
+    const liked = localStorage.getItem(`like_${appId}`);
+    setLiked(!!liked);
   };
 
   const loadComments = async () => {
-    const data = await getCommentsByApp(Number(appId));
+    const data = await getComments(appId);
     setComments(data);
   };
 
@@ -67,7 +69,7 @@ export default function AppDetailPage() {
 
     if (app.downloadUrl) {
       window.open(app.downloadUrl, '_blank');
-      await incrementDownloadCount(app.id);
+      await incrementDownload(app.id);
       setDownloading(false);
       setDownloadStatus('idle');
       return;
@@ -90,7 +92,7 @@ export default function AppDetailPage() {
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 2000);
       
-      await incrementDownloadCount(app.id);
+      await incrementDownload(app.id);
     } else if (typeof app.fileData === 'string' && app.fileData.startsWith('data:')) {
       const link = document.createElement('a');
       link.href = app.fileData;
@@ -98,7 +100,7 @@ export default function AppDetailPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      await incrementDownloadCount(app.id);
+      await incrementDownload(app.id);
     } else if (app.fileHandle) {
       try {
         const file = await app.fileHandle.getFile();
@@ -110,7 +112,7 @@ export default function AppDetailPage() {
         link.click();
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(url), 2000);
-        await incrementDownloadCount(app.id);
+        await incrementDownload(app.id);
       } catch (err) {
         toast.error('Failed to read from local file system handle.');
       }
@@ -126,17 +128,23 @@ export default function AppDetailPage() {
     }, 1500);
   };
 
-  const handleLike = () => {
-    const likes = JSON.parse(localStorage.getItem('mrjk-likes') || '{}');
-    if (liked) {
-      delete likes[appId];
-      setLikeCount(c => Math.max(0, c - 1));
-    } else {
-      likes[appId] = true;
+  const handleLike = async () => {
+    const isLiked = localStorage.getItem(`like_${appId}`);
+    if (!isLiked) {
+      await updateDoc(doc(db, 'apps', appId), {
+        likeCount: increment(1)
+      });
+      localStorage.setItem(`like_${appId}`, 'true');
+      setLiked(true);
       setLikeCount(c => c + 1);
+    } else {
+      await updateDoc(doc(db, 'apps', appId), {
+        likeCount: increment(-1)
+      });
+      localStorage.removeItem(`like_${appId}`);
+      setLiked(false);
+      setLikeCount(c => Math.max(0, c - 1));
     }
-    localStorage.setItem('mrjk-likes', JSON.stringify(likes));
-    setLiked(!liked);
   };
 
   const handleShare = async () => {
@@ -160,14 +168,14 @@ export default function AppDetailPage() {
   const handlePostComment = async () => {
     if (!commentText.trim()) return;
     const sanitized = DOMPurify.sanitize(commentText.trim());
-    await addComment({ appId: Number(appId), authorName: commentName, text: sanitized });
+    await addComment(appId, commentName, sanitized);
     setCommentText('');
     loadComments();
     toast.success('Comment posted! 💬');
   };
 
   const handleHideComment = async (id) => {
-    await updateComment(id, { hidden: true });
+    await hideComment(id, true);
     loadComments();
   };
 

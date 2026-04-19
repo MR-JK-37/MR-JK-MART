@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, AppWindow, Download, MessageCircle, Mail } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
-import { getAllCommentsCount, getUnreadContactCount } from '../../db/database';
+import { getAllApps, getAllContacts } from '../../firebase/services';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import AppGrid from '../../components/apps/AppGrid';
 import AddEditAppModal from '../../components/admin/AddEditAppModal';
 import GlassCard from '../../components/ui/GlassCard';
@@ -20,20 +22,19 @@ export default function AdminHomePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const db = await import('../../db/database').then(m => m.getDB());
-      const [allApps, allContacts] = await Promise.all([
-        db.getAll('apps'),
-        db.getAll('contacts'),
+      const [allApps, allContacts, commentsSnap] = await Promise.all([
+        getAllApps(),
+        getAllContacts(),
+        getDocs(collection(db, 'comments'))
       ]);
-      const commentsCount = await import('../../db/database').then(m => m.getAllCommentsCount());
-      const unreadContacts = await import('../../db/database').then(m => m.getUnreadContactCount());
       
       const appsList = allApps || [];
       setApps(appsList);
       setContacts(allContacts || []);
       
       const totalDownloads = appsList.reduce((sum, app) => sum + (app.downloadCount || 0), 0);
-      setStats({ apps: appsList.length, downloads: totalDownloads, comments: commentsCount, contacts: unreadContacts });
+      const unreadContacts = allContacts.filter(c => !c.read).length;
+      setStats({ apps: appsList.length, downloads: totalDownloads, comments: commentsSnap.size, contacts: unreadContacts });
     } catch (err) {
       console.error('AdminHomePage load error:', err);
       setError(err.message);

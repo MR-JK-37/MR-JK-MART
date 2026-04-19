@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, Trash2, X, Mail, Clock } from 'lucide-react';
-import { getAllContacts, deleteContact, markContactRead } from '../../db/database';
+import { getAllContacts, deleteContact, markContactRead } from '../../firebase/services';
 import GlassCard from '../../components/ui/GlassCard';
 import GlassModal from '../../components/ui/GlassModal';
 import GlassButton from '../../components/ui/GlassButton';

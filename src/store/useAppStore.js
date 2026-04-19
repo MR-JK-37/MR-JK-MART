@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getAllApps, getApp, addApp as dbAddApp, updateApp as dbUpdateApp, deleteApp as dbDeleteApp } from '../db/database';
+import { getAllApps, getAppById, addApp as dbAddApp, updateApp as dbUpdateApp, deleteApp as dbDeleteApp } from '../firebase/services';
 
 const useAppStore = create((set, get) => ({
   // ─── Theme ───
@@ -37,7 +37,7 @@ const useAppStore = create((set, get) => ({
 
   getAppById: async (id) => {
     try {
-      return await getApp(id);
+      return await getAppById(id);
     } catch (err) {
       console.error('Failed to get app:', err);
       return null;
@@ -59,7 +59,7 @@ const useAppStore = create((set, get) => ({
     try {
       const updated = await dbUpdateApp(id, data);
       set(state => ({
-        apps: state.apps.map(a => a.id === Number(id) ? updated : a)
+        apps: state.apps.map(a => a.id === id ? { ...a, ...data } : a)
       }));
       return updated;
     } catch (err) {
@@ -72,7 +72,7 @@ const useAppStore = create((set, get) => ({
     try {
       await dbDeleteApp(id);
       set(state => ({
-        apps: state.apps.filter(a => a.id !== Number(id))
+        apps: state.apps.filter(a => a.id !== id)
       }));
     } catch (err) {
       console.error('Failed to delete app:', err);

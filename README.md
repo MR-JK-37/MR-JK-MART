@@ -20,7 +20,7 @@
 - 📱 **Responsive** — Mobile-first design with touch support
 - ✨ **Animations** — Framer Motion page transitions & parallax
 - 🎯 **Custom Cursor** — Glowing cursor effect (desktop)
-- 🗄️ **IndexedDB** — Persistent local storage
+- 🗄️ **Firebase** — Realtime cloud database & storage syncs across all devices
 
 ## 🛠️ Tech Stack
 
@@ -31,7 +31,8 @@
 | Tailwind CSS v3 | Styling |
 | Framer Motion | Animations |
 | Zustand | State Management |
-| IndexedDB (idb) | Persistent Storage |
+| Firebase | Cloud Database & File Storage |
+| IndexedDB | Per-Device Local Admin Auth |
 | Web Crypto API | Admin Auth (PBKDF2) |
 | Lucide React | Icons |
 
@@ -88,6 +89,67 @@ chmod +x setup-github.sh
 ```
 
 Then go to **Settings → Pages → Source: gh-pages branch → root folder**
+
+## 🔥 Firebase Setup Guide
+
+1. Go to console.firebase.google.com
+2. Click "Add project" → name it "mrjk-mart" → Continue
+3. Disable Google Analytics → Create project
+
+4. Firestore Database:
+   Build → Firestore Database → Create database
+   Choose "Start in production mode" → select region → Enable
+   
+   Go to Rules tab, set:
+   ```text
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /apps/{id} {
+         allow read: if true;
+         allow write: if request.auth == null; 
+       }
+       match /comments/{id} {
+         allow read: if true;
+         allow create: if true;
+         allow update, delete: if false; 
+       }
+       match /contacts/{id} {
+         allow create: if true;
+         allow read, update, delete: if false;
+       }
+       match /settings/{id} {
+         allow read: if true;
+         allow write: if false;
+       }
+     }
+   }
+   ```
+
+5. Firebase Storage:
+   Build → Storage → Get started → Production mode → Enable
+   
+   Storage Rules:
+   ```text
+   rules_version = '2';
+   service firebase.storage {
+     match /b/{bucket}/o {
+       match /apps/{allPaths=**} {
+         allow read: if true;
+         allow write: if true; 
+       }
+     }
+   }
+   ```
+
+6. Get config:
+   Project Settings (gear icon) → General → Your apps → Add app → Web (\</\>)
+   Copy the firebaseConfig object values into a `.env` file in the root directory.
+
+7. GitHub Actions:
+   Add `.env` values to GitHub Secrets:
+   GitHub Repo → Settings → Secrets → Actions → New secret
+   Add each `VITE_FIREBASE_*` value
 
 ## 📄 License
 

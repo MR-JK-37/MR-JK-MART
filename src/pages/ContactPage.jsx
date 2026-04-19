@@ -7,7 +7,7 @@ import GlassModal from '../components/ui/GlassModal';
 import AdminGate from '../components/admin/AdminGate';
 import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
-import { addContact, getSetting, setSetting } from '../db/database';
+import { addContact, getSettings, saveSettings } from '../firebase/services';
 
 export default function ContactPage() {
   const isAdmin = useAppStore(s => s.isAdmin);
@@ -31,7 +31,7 @@ export default function ContactPage() {
   }, []);
 
   const loadSocial = async () => {
-    const saved = await getSetting('social');
+    const saved = await getSettings('social');
     if (saved) {
       setSocial(saved);
       setSocialForm(saved);
@@ -57,7 +57,7 @@ export default function ContactPage() {
   };
 
   const handleSaveSocial = async () => {
-    await setSetting('social', socialForm);
+    await saveSettings('social', socialForm);
     setSocial(socialForm);
     setShowSocialEdit(false);
     toast.success('Social links updated! ✨');

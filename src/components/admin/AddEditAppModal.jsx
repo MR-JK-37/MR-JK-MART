@@ -5,7 +5,7 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
-import { compressFile } from '../../utils/fileCompression';
+import { uploadFile, addApp as dbAddApp, updateApp as dbUpdateApp } from '../../firebase/services';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const platforms = ['Windows', 'Mac', 'Linux', 'Android', 'iOS', 'Web'];
@@ -22,11 +22,17 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
     fileName: '', fileSize: '', showLikes: true, showComments: true,
     published: true, manualSteps: [],
-    compressed: false, originalSize: 0, compressedSize: 0, compressionRatio: 0
+    iconFile: null, appFile: null
   });
 
+  const [publishing, setPublishing] = useState(false);
+  const [publishStep, setPublishStep] = useState('');
+  const [iconProgress, setIconProgress] = useState(0);
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [fileProgress, setFileProgress] = useState(0);
+
   const [uploadProgress, setUploadProgress] = useState(null);
-  const [uploadStatus, setUploadStatus] = useState('idle'); // idle, reading, compressing
+  const [uploadStatus, setUploadStatus] = useState('idle');
   const [fileTier, setFileTier] = useState(0);
   const urlInputRef = useRef(null);
 
@@ -50,14 +56,11 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         showComments: editApp.showComments !== false,
         published: editApp.published !== false,
         manualSteps: editApp.manualSteps || [],
-        compressed: editApp.compressed || false,
-        originalSize: editApp.originalSize || 0,
-        compressedSize: editApp.compressedSize || 0,
-        compressionRatio: editApp.compressionRatio || 0,
+        iconFile: null, appFile: null
       });
       let initialTier = 0;
-      if (editApp.fileData) initialTier = 1;
-      if (editApp.fileHandle) initialTier = 2;
+      if (editApp.downloadUrl) initialTier = 3;
+      if (editApp.storagePath) initialTier = 1;
       setFileTier(initialTier);
     } else {
       setForm({
@@ -66,7 +69,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
         fileName: '', fileSize: '', showLikes: true, showComments: true,
         published: true, manualSteps: [],
-        compressed: false, originalSize: 0, compressedSize: 0, compressionRatio: 0
+        iconFile: null, appFile: null
       });
       setFileTier(0);
     }
@@ -81,6 +84,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   const handleIconUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setForm(prev => ({ ...prev, iconFile: file }));
     const reader = new FileReader();
     reader.onload = () => handleChange('icon', reader.result);
     reader.readAsDataURL(file);
@@ -93,7 +97,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       reader.onload = () => {
         setForm(prev => ({
           ...prev,
-          previewImages: [...prev.previewImages, reader.result].slice(0, 10),
+          previewImages: [...prev.previewImages, { url: reader.result, file }].slice(0, 10),
         }));
       };
       reader.readAsDataURL(file);
@@ -117,102 +121,18 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     // Tier 3: > 500MB
     if (file.size > 500 * 1024 * 1024) {
       setFileTier(3);
-      handleChange('fileData', null);
-      handleChange('fileHandle', null);
+      setForm(p => ({ ...p, appFile: null, fileData: null }));
       setTimeout(() => urlInputRef.current?.focus(), 100);
       return;
     }
     
-    // Tier 2: 100MB - 500MB
-    if (file.size > 100 * 1024 * 1024) {
-      setFileTier(2);
-      if (window.showSaveFilePicker) {
-        try {
-          const fileHandle = await window.showSaveFilePicker({ suggestedName: file.name });
-          const writable = await fileHandle.createWritable();
-          setUploadProgress(0);
-          await writable.write(file);
-          await writable.close();
-          handleChange('fileHandle', fileHandle);
-          handleChange('fileData', null);
-          setUploadProgress(100);
-          setTimeout(() => setUploadProgress(null), 1000);
-          toast.success('File saved locally via File System API');
-        } catch (err) {
-          toast.warning('File save cancelled or failed. Use External URL.');
-          setTimeout(() => urlInputRef.current?.focus(), 100);
-          setUploadProgress(null);
-        }
-      } else {
-        toast.warning('File System Access API not supported. Please use an external URL for large files.');
-        setTimeout(() => urlInputRef.current?.focus(), 100);
-      }
-      return;
-    }
-
-    // Tier 1: 0 - 100MB
     setFileTier(1);
-    
-    // Storage check
-    if (navigator.storage && navigator.storage.estimate) {
-      const estimate = await navigator.storage.estimate();
-      const available = estimate.quota - estimate.usage;
-      if (file.size > available * 0.8) {
-        toast.warning('Storage may be insufficient. Consider using an external URL.');
-      }
-    }
-
-    setUploadStatus('reading');
-    setUploadProgress(0);
-    const reader = new FileReader();
-    reader.onprogress = (evt) => {
-      if (evt.lengthComputable) {
-        const percent = (evt.loaded / evt.total) * 100;
-        setUploadProgress(percent);
-      }
-    };
-    reader.onload = async () => {
-      setUploadStatus('compressing');
-      setUploadProgress(null);
-      const arrayBuffer = reader.result;
-      
-      const result = await compressFile(arrayBuffer);
-      
-      setForm(prev => ({
-        ...prev,
-        fileData: result.data,
-        fileHandle: null,
-        compressed: result.compressed,
-        originalSize: result.originalSize,
-        compressedSize: result.compressedSize,
-        compressionRatio: result.compressionRatio
-      }));
-      
-      setUploadStatus('done');
-      setUploadProgress(100);
-      setTimeout(() => {
-        setUploadProgress(null);
-        setUploadStatus('idle');
-      }, 1500);
-    };
-    reader.readAsArrayBuffer(file);
+    setForm(p => ({ ...p, appFile: file, fileData: true }));
   };
 
   const removeFile = () => {
-    handleChange('fileData', null);
-    handleChange('fileHandle', null);
-    handleChange('fileName', '');
-    handleChange('fileSize', '');
-    setForm(prev => ({
-      ...prev,
-      compressed: false,
-      originalSize: 0,
-      compressedSize: 0,
-      compressionRatio: 0
-    }));
+    setForm(prev => ({ ...prev, fileData: null, appFile: null, fileName: '', fileSize: '' }));
     setFileTier(0);
-    setUploadProgress(null);
-    setUploadStatus('idle');
   };
 
   const togglePlatform = (p) => {
@@ -273,20 +193,95 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       toast.error('Name and short description are required');
       return;
     }
-    setLoading(true);
+    setPublishing(true);
+    setPublishStep('Uploading icon...');
+    
+    let iconUrl = form.icon, iconPath = editApp?.iconPath || null;
+    let fileUrl = form.downloadUrl, filePath = editApp?.storagePath || null;
+    let previewUrls = [], previewPaths = [];
+
     try {
+      // Upload icon
+      if (form.iconFile) {
+        const result = await uploadFile(
+          form.iconFile,
+          `apps/${Date.now()}/icon_${form.iconFile.name}`,
+          (pct) => setIconProgress(pct)
+        );
+        iconUrl = result.url;
+        iconPath = result.path;
+      }
+
+      // Upload preview images
+      setPublishStep('Uploading preview images...');
+      for (const [i, img] of form.previewImages.entries()) {
+        if (img.file) {
+          const result = await uploadFile(
+            img.file,
+            `apps/${Date.now()}/preview_${i}_${img.file.name}`,
+            (pct) => setPreviewProgress(pct)
+          );
+          previewUrls.push(result.url);
+          previewPaths.push(result.path);
+        } else {
+          // Keep existing strings
+          previewUrls.push(img.url || img);
+        }
+      }
+
+      // Upload app file (if direct upload, not URL)
+      if (form.appFile && !form.downloadUrl) {
+        setPublishStep(`Uploading ${form.appFile.name}...`);
+        const result = await uploadFile(
+          form.appFile,
+          `apps/${Date.now()}/files/${form.appFile.name}`,
+          (pct) => setFileProgress(pct)
+        );
+        fileUrl = result.url;
+        filePath = result.path;
+      }
+
+      // Save to Firestore
+      setPublishStep('Saving app data...');
+      const appData = {
+        name: form.name,
+        shortDesc: form.shortDesc,
+        longDesc: form.longDesc,
+        version: form.version,
+        category: form.category,
+        platform: form.platform,
+        icon: iconUrl, 
+        iconPath,
+        previewImages: previewUrls, 
+        previewPaths,
+        downloadUrl: form.downloadUrl || fileUrl,
+        storagePath: filePath,
+        fileName: form.fileName || null,
+        fileSize: form.fileSize || null,
+        showLikes: form.showLikes,
+        showComments: form.showComments,
+        published: form.published,
+        manualSteps: form.manualSteps,
+      };
+
       if (editApp) {
-        await updateApp(editApp.id, form);
+        await dbUpdateApp(editApp.id, appData);
         toast.success('App updated! ✨');
       } else {
-        await addApp(form);
+        await dbAddApp(appData);
         toast.success('App published! 🚀');
       }
-      onClose();
+      
+      setPublishStep('Done! ✅');
+      setTimeout(() => {
+        setPublishing(false);
+        onClose();
+      }, 500);
+
     } catch (err) {
-      toast.error('Failed to save app');
+      toast.error('Failed to publish app');
+      setPublishing(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -367,7 +362,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
           <div className="flex gap-2 flex-wrap">
             {form.previewImages.map((img, i) => (
               <div key={i} className="relative">
-                <img src={img} alt={`Preview ${i}`} className="w-20 h-20 rounded-xl object-cover" />
+                <img src={img.url || img} alt={`Preview ${i}`} className="w-20 h-20 rounded-xl object-cover" />
                 <button onClick={() => removePreview(i)} className="absolute -top-1 -right-1 p-0.5 rounded-full bg-red-500 text-white">
                   <X size={10} />
                 </button>
@@ -556,8 +551,18 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         </div>
       </div>
 
-      <GlassButton onClick={handleSubmit} disabled={loading} className="w-full mt-6 py-3.5 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl font-bold">
-        {loading ? <div className="loader-ring" style={{ width: 20, height: 20, borderWidth: 2 }} /> : (
+      <GlassButton onClick={handleSubmit} disabled={publishing} className="w-full mt-6 py-3.5 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl font-bold">
+        {publishing ? (
+          <div className="flex flex-col items-center gap-1 w-full relative">
+            <span className="text-xs">{publishStep}</span>
+            <div className="w-full bg-black/20 h-1.5 rounded-full overflow-hidden mt-1">
+              <div 
+                className="h-full gradient-bg transition-all duration-300" 
+                style={{ width: `${Math.max(iconProgress, fileProgress, previewProgress)}%` }} 
+              />
+            </div>
+          </div>
+        ) : (
           <>{editApp ? 'Update App' : 'Publish App'} 🚀</>
         )}
       </GlassButton>
