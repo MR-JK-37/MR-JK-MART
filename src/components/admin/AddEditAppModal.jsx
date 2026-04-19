@@ -327,7 +327,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
                 type="button"
                 onClick={() => togglePlatform(p)}
                 className={`glass-pill text-xs transition-all ${
-                  form.platform.includes(p) ? 'gradient-bg text-white border-transparent' : ''
+                  form.platform.includes(p) ? 'active' : ''
                 }`}
               >
                 {p}

@@ -271,6 +271,14 @@ body.dark-bg {
   color: #475569;
 }
 
+.dark .glass-pill.active,
+.light .glass-pill.active,
+.glass-pill.active {
+  background: linear-gradient(135deg, #7c3aed, #06b6d4) !important;
+  color: white !important;
+  border-color: transparent !important;
+}
+
 /* ═══════════════════════════════════════════
    PAGE TRANSITIONS
    ═══════════════════════════════════════════ */
