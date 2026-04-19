@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Upload, X, Plus, Link as LinkIcon, GripVertical, Image, Video, Trash2, Save } from 'lucide-react';
+import { Upload, X, Plus, Link as LinkIcon, GripVertical, Image, Video, Trash2, Save, CheckCircle2 } from 'lucide-react';
 import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
@@ -17,10 +17,14 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   const [form, setForm] = useState({
     name: '', shortDesc: '', longDesc: '', version: '1.0.0',
     category: 'Utility', platform: [], icon: '',
-    previewImages: [], fileData: null, downloadUrl: '',
+    previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
     fileName: '', fileSize: '', showLikes: true, showComments: true,
     published: true, manualSteps: [],
   });
+
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [fileTier, setFileTier] = useState(0);
+  const urlInputRef = useRef(null);
 
   useEffect(() => {
     if (editApp) {
@@ -34,6 +38,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         icon: editApp.icon || '',
         previewImages: editApp.previewImages || [],
         fileData: editApp.fileData || null,
+        fileHandle: editApp.fileHandle || null,
         downloadUrl: editApp.downloadUrl || '',
         fileName: editApp.fileName || '',
         fileSize: editApp.fileSize || '',
@@ -42,15 +47,21 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         published: editApp.published !== false,
         manualSteps: editApp.manualSteps || [],
       });
+      let initialTier = 0;
+      if (editApp.fileData) initialTier = 1;
+      if (editApp.fileHandle) initialTier = 2;
+      setFileTier(initialTier);
     } else {
       setForm({
         name: '', shortDesc: '', longDesc: '', version: '1.0.0',
         category: 'Utility', platform: [], icon: '',
-        previewImages: [], fileData: null, downloadUrl: '',
+        previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
         fileName: '', fileSize: '', showLikes: true, showComments: true,
         published: true, manualSteps: [],
       });
+      setFileTier(0);
     }
+    setUploadProgress(null);
   }, [editApp, isOpen]);
 
   const handleChange = (field, value) => {
@@ -86,20 +97,85 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     }));
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error('File too large (>50MB). Use external URL instead.');
+
+    handleChange('fileName', file.name);
+    handleChange('fileSize', formatFileSize(file.size));
+    
+    // Tier 3: > 500MB
+    if (file.size > 500 * 1024 * 1024) {
+      setFileTier(3);
+      handleChange('fileData', null);
+      handleChange('fileHandle', null);
+      setTimeout(() => urlInputRef.current?.focus(), 100);
       return;
     }
+    
+    // Tier 2: 100MB - 500MB
+    if (file.size > 100 * 1024 * 1024) {
+      setFileTier(2);
+      if (window.showSaveFilePicker) {
+        try {
+          const fileHandle = await window.showSaveFilePicker({ suggestedName: file.name });
+          const writable = await fileHandle.createWritable();
+          setUploadProgress(0);
+          await writable.write(file);
+          await writable.close();
+          handleChange('fileHandle', fileHandle);
+          handleChange('fileData', null);
+          setUploadProgress(100);
+          setTimeout(() => setUploadProgress(null), 1000);
+          toast.success('File saved locally via File System API');
+        } catch (err) {
+          toast.warning('File save cancelled or failed. Use External URL.');
+          setTimeout(() => urlInputRef.current?.focus(), 100);
+          setUploadProgress(null);
+        }
+      } else {
+        toast.warning('File System Access API not supported. Please use an external URL for large files.');
+        setTimeout(() => urlInputRef.current?.focus(), 100);
+      }
+      return;
+    }
+
+    // Tier 1: 0 - 100MB
+    setFileTier(1);
+    
+    // Storage check
+    if (navigator.storage && navigator.storage.estimate) {
+      const estimate = await navigator.storage.estimate();
+      const available = estimate.quota - estimate.usage;
+      if (file.size > available * 0.8) {
+        toast.warning('Storage may be insufficient. Consider using an external URL.');
+      }
+    }
+
+    setUploadProgress(0);
     const reader = new FileReader();
-    reader.onload = () => {
-      handleChange('fileData', reader.result);
-      handleChange('fileName', file.name);
-      handleChange('fileSize', formatFileSize(file.size));
+    reader.onprogress = (evt) => {
+      if (evt.lengthComputable) {
+        const percent = (evt.loaded / evt.total) * 100;
+        setUploadProgress(percent);
+      }
     };
-    reader.readAsDataURL(file);
+    reader.onload = () => {
+      handleChange('fileData', reader.result); // Store ArrayBuffer!
+      handleChange('fileHandle', null);
+      setUploadProgress(100);
+      setTimeout(() => setUploadProgress(null), 1000);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const removeFile = () => {
+    handleChange('fileData', null);
+    handleChange('fileHandle', null);
+    handleChange('fileName', '');
+    handleChange('fileSize', '');
+    setFileTier(0);
+    setUploadProgress(null);
   };
 
   const togglePlatform = (p) => {
@@ -269,86 +345,165 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
           </div>
         </div>
 
-        {/* App File */}
-        <div>
+        {/* Tiered App File UI */}
+        <div className="mt-6 border-t border-white/10 pt-6">
           <label className="block text-xs font-medium opacity-60 mb-2">App File</label>
-          {form.fileData ? (
-            <div className="glass-pill flex items-center gap-2">
-              <span className="text-xs">{form.fileName} ({form.fileSize})</span>
-              <button onClick={() => { handleChange('fileData', null); handleChange('fileName', ''); handleChange('fileSize', ''); }}>
-                <X size={14} />
-              </button>
+          {form.fileData || form.fileHandle || form.fileName ? (
+            <div className="glass p-4 rounded-xl relative overflow-hidden flex flex-col gap-2 shadow-inner bg-black/20" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+              <div className="flex items-center justify-between z-10 w-full relative">
+                 <div className="flex items-center gap-3">
+                    <span className="text-3xl opacity-80">📦</span>
+                    <div className="max-w-[180px] sm:max-w-[300px]">
+                      <div className="text-sm font-semibold truncate">{form.fileName}</div>
+                      <div className="text-xs opacity-60">Size: {form.fileSize}</div>
+                    </div>
+                 </div>
+                 <button onClick={removeFile} className="hover:bg-red-500/20 text-red-400 p-2 rounded-lg transition-colors absolute right-0 top-0">
+                   <X size={16} />
+                 </button>
+              </div>
+
+              {/* Status Badge */}
+              <div className="mt-2 z-10 flex">
+                {fileTier === 1 && <span className="glass-pill bg-green-500/20 text-green-300 text-[10px] font-bold tracking-wide uppercase px-3">Stored locally</span>}
+                {fileTier === 2 && <span className="glass-pill bg-yellow-500/20 text-yellow-300 text-[10px] font-bold tracking-wide uppercase px-3">Large file — use URL recommended</span>}
+                {fileTier === 3 && <span className="glass-pill bg-red-500/20 text-red-300 text-[10px] font-bold tracking-wide uppercase px-3">Too large — URL required</span>}
+              </div>
+
+              {/* Animated Progress Bar */}
+              {uploadProgress !== null && uploadProgress < 100 && fileTier === 1 && (
+                <div className="mt-3 z-10">
+                  <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+                    <motion.div 
+                      className="h-full gradient-bg" 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${uploadProgress}%` }} 
+                      transition={{ ease: "easeOut", duration: 0.2 }}
+                    />
+                  </div>
+                  <div className="text-xs opacity-60 mt-1.5 font-mono">Reading file... {Math.round(uploadProgress)}%</div>
+                </div>
+              )}
             </div>
           ) : (
-            <label className="glass p-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer hover:bg-white/10 transition-colors">
-              <Upload size={18} className="opacity-40" />
-              <span className="text-sm opacity-60">Upload file (max 50MB)</span>
+            <label className="glass p-6 rounded-xl flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/10 transition-all border border-dashed border-white/20 hover:border-white/40">
+              <Upload size={28} className="opacity-40 mb-1" />
+              <span className="text-sm font-semibold text-center">Choose your app file <span className="opacity-50 font-normal">(any size)</span></span>
+              <span className="text-[11px] opacity-40 text-center uppercase tracking-wider max-w-[200px] leading-relaxed">
+                Under 100MB stored locally • Larger files need an external URL
+              </span>
               <input type="file" onChange={handleFileUpload} className="hidden" />
             </label>
           )}
+
+          {/* Tier 3 Error Message */}
+          <AnimatePresence>
+            {fileTier === 3 && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, scale: 0.95 }}
+                animate={{ opacity: 1, height: 'auto', scale: 1 }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-sm overflow-hidden"
+              >
+                <span className="text-xl">⚠️</span>
+                <div className="text-red-200 opacity-90">
+                  <p className="font-semibold mb-2">This file is too large for browser storage.</p>
+                  <p className="text-xs opacity-80 leading-relaxed font-mono">
+                    Please upload it to a file host and paste the download URL below.<br/><br/>
+                    • github.com/YOUR_REPO/releases/new<br/>
+                    • drive.google.com (set link to public)<br/>
+                    • mediafire.com / mega.io
+                  </p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* External Download URL */}
-        <div>
-          <label className="block text-xs font-medium opacity-60 mb-1">External Download URL (optional)</label>
-          <div className="flex items-center gap-2">
-            <LinkIcon size={16} className="opacity-40" />
-            <input value={form.downloadUrl} onChange={e => handleChange('downloadUrl', e.target.value)} className="glass-input" placeholder="https://github.com/..." />
+        {/* External Download URL Section */}
+        <div className="mt-8 mb-4 p-4 rounded-xl bg-black/10 border border-white/5">
+          <label className="block text-sm mb-3">
+            <span className="opacity-50 text-xs uppercase tracking-wider mr-2 font-bold">OR</span>
+            <span className="gradient-text font-semibold">Use External Download Link</span>
+            <span className="text-xs opacity-40 ml-2 block sm:inline mt-1 sm:mt-0">(recommended for large files)</span>
+          </label>
+          <div className="flex items-center gap-2 relative">
+            <LinkIcon size={16} className="opacity-40 absolute left-3 pointer-events-none" />
+            <input 
+              ref={urlInputRef}
+              value={form.downloadUrl} 
+              onChange={e => handleChange('downloadUrl', e.target.value)} 
+              className="glass-input flex-1 pl-10 pr-10" 
+              placeholder="https://..." 
+              style={{ borderColor: form.downloadUrl.startsWith('https://') ? 'rgba(74, 222, 128, 0.4)' : '' }}
+            />
+            {form.downloadUrl.startsWith('https://') && (
+              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute right-3 text-green-400">
+                <CheckCircle2 size={16} />
+              </motion.div>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3 pl-1">
+            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">GitHub</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">Drive</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">Mega</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">MediaFire</span>
+            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1 shadow-inner bg-white/5 border-white/10 text-white">Direct Link</span>
           </div>
         </div>
 
         {/* Visibility Toggles */}
-        <div className="space-y-3">
-          <label className="block text-xs font-medium opacity-60 mb-2">Visibility</label>
+        <div className="space-y-3 mt-8 pt-6 border-t border-white/10">
+          <label className="block text-xs font-medium opacity-60 mb-3">Visibility</label>
           <ToggleRow label="Show like count" value={form.showLikes} onChange={v => handleChange('showLikes', v)} />
           <ToggleRow label="Show comment count" value={form.showComments} onChange={v => handleChange('showComments', v)} />
           <ToggleRow label="Published" value={form.published} onChange={v => handleChange('published', v)} />
         </div>
 
         {/* Manual Steps */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
+        <div className="mt-8 pt-6 border-t border-white/10">
+          <div className="flex items-center justify-between mb-3">
             <label className="text-xs font-medium opacity-60">User Manual Steps</label>
-            <button onClick={() => { setShowStepForm(true); setEditingStepIndex(null); setStepForm({ title: '', desc: '', imageBase64: '', videoUrl: '' }); }} className="glass-pill text-xs gap-1">
-              <Plus size={12} /> Add Step
+            <button onClick={() => { setShowStepForm(true); setEditingStepIndex(null); setStepForm({ title: '', desc: '', imageBase64: '', videoUrl: '' }); }} className="glass-pill text-xs gap-1 font-semibold hover:bg-white/10">
+              <Plus size={14} /> Add Step
             </button>
           </div>
           <div className="space-y-2">
             {form.manualSteps.map((step, i) => (
-              <div key={step.id || i} className="glass p-3 rounded-xl flex items-center gap-3" style={{ borderRadius: 12 }}>
-                <GripVertical size={14} className="opacity-30" />
+              <div key={step.id || i} className="glass p-3 rounded-xl flex items-center gap-3 shadow-sm bg-white/5" style={{ borderRadius: 12 }}>
+                <GripVertical size={14} className="opacity-30 cursor-move" />
                 <span className="w-6 h-6 rounded-full gradient-bg flex items-center justify-center text-white text-xs font-bold">{i + 1}</span>
-                <span className="flex-1 text-sm truncate">{step.title}</span>
-                <button onClick={() => editStep(i)} className="p-1 hover:bg-white/10 rounded"><Image size={14} /></button>
-                <button onClick={() => removeStep(i)} className="p-1 hover:bg-red-500/20 rounded text-red-400"><Trash2 size={14} /></button>
+                <span className="flex-1 text-sm truncate font-medium">{step.title}</span>
+                <button onClick={() => editStep(i)} className="p-1.5 hover:bg-white/10 rounded transition-colors"><Image size={14} /></button>
+                <button onClick={() => removeStep(i)} className="p-1.5 hover:bg-red-500/20 rounded text-red-400 transition-colors"><Trash2 size={14} /></button>
               </div>
             ))}
           </div>
 
           {showStepForm && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-3 glass p-4 rounded-xl space-y-3" style={{ borderRadius: 14 }}>
-              <input value={stepForm.title} onChange={e => setStepForm(p => ({ ...p, title: e.target.value }))} className="glass-input" placeholder="Step title" />
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-4 glass p-5 rounded-xl space-y-4 border border-white/10">
+              <input value={stepForm.title} onChange={e => setStepForm(p => ({ ...p, title: e.target.value }))} className="glass-input font-medium" placeholder="Step title" />
               <textarea value={stepForm.desc} onChange={e => setStepForm(p => ({ ...p, desc: e.target.value }))} className="glass-input" rows={3} placeholder="Step description" />
               <div className="flex gap-2">
-                <label className="glass-pill text-xs cursor-pointer gap-1">
-                  <Image size={12} /> Image
+                <label className="glass-pill text-xs cursor-pointer gap-2 font-medium hover:bg-white/10 transition-colors">
+                  <Image size={14} /> Upload Image
                   <input type="file" accept="image/*" onChange={handleStepImageUpload} className="hidden" />
                 </label>
                 <input value={stepForm.videoUrl} onChange={e => setStepForm(p => ({ ...p, videoUrl: e.target.value }))} className="glass-input text-xs flex-1" placeholder="YouTube URL (optional)" />
               </div>
-              {stepForm.imageBase64 && <img src={stepForm.imageBase64} alt="Step" className="w-full h-32 rounded-lg object-cover" />}
-              <div className="flex gap-2">
-                <GlassButton onClick={handleAddStep} className="text-sm flex items-center gap-1">
-                  <Save size={14} /> {editingStepIndex !== null ? 'Update' : 'Add'}
+              {stepForm.imageBase64 && <img src={stepForm.imageBase64} alt="Step" className="w-full h-40 rounded-lg object-cover shadow-inner" />}
+              <div className="flex gap-2 pt-2">
+                <GlassButton onClick={handleAddStep} className="text-sm flex items-center gap-1.5 px-5">
+                  <Save size={14} /> {editingStepIndex !== null ? 'Update Step' : 'Add Step'}
                 </GlassButton>
-                <GlassButton variant="glass" onClick={() => { setShowStepForm(false); setEditingStepIndex(null); }} className="text-sm">Cancel</GlassButton>
+                <GlassButton variant="glass" onClick={() => { setShowStepForm(false); setEditingStepIndex(null); }} className="text-sm px-4">Cancel</GlassButton>
               </div>
             </motion.div>
           )}
         </div>
       </div>
 
-      <GlassButton onClick={handleSubmit} disabled={loading} className="w-full mt-6 py-3 flex items-center justify-center gap-2">
+      <GlassButton onClick={handleSubmit} disabled={loading} className="w-full mt-6 py-3.5 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl font-bold">
         {loading ? <div className="loader-ring" style={{ width: 20, height: 20, borderWidth: 2 }} /> : (
           <>{editApp ? 'Update App' : 'Publish App'} 🚀</>
         )}
@@ -359,16 +514,16 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
 
 function ToggleRow({ label, value, onChange }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm">{label}</span>
+    <div className="flex items-center justify-between p-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer" onClick={() => onChange(!value)}>
+      <span className="text-sm font-medium">{label}</span>
       <button
-        onClick={() => onChange(!value)}
-        className={`w-12 h-6 rounded-full relative transition-colors ${value ? 'gradient-bg' : 'bg-gray-600'}`}
+        type="button"
+        className={`w-12 h-6 rounded-full relative transition-colors shadow-inner ${value ? 'gradient-bg' : 'bg-gray-600'}`}
       >
         <motion.div
-          className="w-5 h-5 rounded-full bg-white absolute top-0.5"
+          className="w-5 h-5 rounded-full bg-white absolute top-0.5 shadow-sm"
           animate={{ left: value ? 26 : 2 }}
-          transition={{ type: 'spring', stiffness: 500 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
         />
       </button>
     </div>
@@ -376,7 +531,9 @@ function ToggleRow({ label, value, onChange }) {
 }
 
 function formatFileSize(bytes) {
+  if (!bytes) return '0 B';
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }

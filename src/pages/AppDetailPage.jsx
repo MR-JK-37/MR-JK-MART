@@ -63,13 +63,37 @@ export default function AppDetailPage() {
     setDownloading(true);
     await incrementDownloadCount(app.id);
 
-    if (app.fileData) {
+    if (app.fileData instanceof ArrayBuffer) {
+      const blob = new Blob([app.fileData], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = app.fileName || `${app.name}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } else if (typeof app.fileData === 'string' && app.fileData.startsWith('data:')) {
       const link = document.createElement('a');
       link.href = app.fileData;
       link.download = app.fileName || `${app.name}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    } else if (app.fileHandle) {
+      try {
+        const file = await app.fileHandle.getFile();
+        const url = URL.createObjectURL(file);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = app.fileName || file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      } catch (err) {
+        toast.error('Failed to read from local file system handle.');
+      }
     } else if (app.downloadUrl) {
       window.open(app.downloadUrl, '_blank');
     } else {
@@ -182,23 +206,32 @@ export default function AppDetailPage() {
             </div>
 
             {/* Download Button */}
-            <GlassButton
-              onClick={handleDownload}
-              disabled={downloading}
-              className="flex items-center gap-2 text-base px-8 py-3"
-            >
-              {downloading ? (
-                <>
-                  <div className="loader-ring" style={{ width: 18, height: 18, borderWidth: 2 }} />
-                  Downloading...
-                </>
-              ) : (
-                <>
-                  <Download size={20} />
-                  Download v{app.version || '1.0.0'}
-                </>
-              )}
-            </GlassButton>
+            <div className="flex items-center gap-4">
+              <GlassButton
+                onClick={handleDownload}
+                disabled={downloading}
+                className="flex items-center gap-3 text-base px-8 py-3"
+              >
+                {downloading ? (
+                  <>
+                    <div className="loader-ring" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                    Downloading...
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Download size={20} />
+                      <span>Download v{app.version || '1.0.0'}</span>
+                    </div>
+                    {app.fileSize && (
+                      <div className="flex items-center gap-3 pl-3 border-l border-white/20">
+                        <span className="opacity-80 text-sm">{app.fileSize}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </GlassButton>
+            </div>
           </div>
         </div>
 
