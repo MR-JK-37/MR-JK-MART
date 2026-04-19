@@ -9,8 +9,7 @@ import BackgroundOrbs from './components/effects/BackgroundOrbs';
 import PageLoader from './components/effects/PageLoader';
 
 // Pages
-import SplashPage from './pages/SplashPage';
-import HomePage from './pages/HomePage';
+import IndexPage from './pages/IndexPage';
 import AppDetailPage from './pages/AppDetailPage';
 import SearchPage from './pages/SearchPage';
 import ContactPage from './pages/ContactPage';
@@ -20,7 +19,7 @@ import AdminContactsPage from './pages/admin/AdminContactsPage';
 
 function ProtectedRoute({ children }) {
   const isAdmin = useAppStore(s => s.isAdmin);
-  if (!isAdmin) return <Navigate to="/home" replace />;
+  if (!isAdmin) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -30,8 +29,7 @@ function AnimatedRoutes() {
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<SplashPage />} />
-        <Route path="/home" element={<HomePage />} />
+        <Route path="/" element={<IndexPage />} />
         <Route path="/app/:appId" element={<AppDetailPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/contact" element={<ContactPage />} />

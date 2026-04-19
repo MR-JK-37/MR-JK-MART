@@ -5,7 +5,7 @@ import { Menu, X, Sun, Moon, Shield } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
 
 const navLinks = [
-  { path: '/home', label: 'Home' },
+  { path: '/', label: 'Home' },
   { path: '/search', label: 'Search' },
   { path: '/contact', label: 'Contact' },
 ];
@@ -42,7 +42,7 @@ export default function Navbar() {
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo */}
-          <Link to="/home" className="flex items-center gap-1 no-underline">
+          <Link to="/" className="flex items-center gap-1 no-underline">
             <span className="font-display text-xl font-bold gradient-text">MR!JK!</span>
             <span className={`font-display text-xl font-light ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
               MART
