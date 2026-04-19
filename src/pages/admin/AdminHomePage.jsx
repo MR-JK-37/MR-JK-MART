@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, AppWindow, Download, MessageCircle, Mail } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
-import { getAllApps, getAllContacts } from '../../firebase/services';
+import { getAllApps, getAllContacts } from '../../firebase/appService';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import AppGrid from '../../components/apps/AppGrid';

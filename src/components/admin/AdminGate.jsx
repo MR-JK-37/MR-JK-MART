@@ -6,7 +6,7 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
-import { getAdminAuth, setAdminAuth } from '../../db/database';
+import { getAdminKey, saveAdminKey } from '../../db/database';
 import { hashPassword, verifyPassword } from '../../crypto/adminAuth';
 
 export default function AdminGate({ isOpen, onClose }) {
@@ -54,7 +54,7 @@ export default function AdminGate({ isOpen, onClose }) {
   }, [lockUntil]);
 
   const checkSetup = async () => {
-    const auth = await getAdminAuth();
+    const auth = await getAdminKey();
     setIsSetup(!auth);
   };
 
@@ -91,7 +91,7 @@ export default function AdminGate({ isOpen, onClose }) {
     setLoading(true);
     try {
       const { salt, hash } = await hashPassword(key);
-      await setAdminAuth({ salt, hash });
+      await saveAdminKey(salt, hash);
       setAdmin(true);
       toast.success('Admin key set! Welcome, MR!JK! 🔓');
       onClose();
@@ -110,7 +110,7 @@ export default function AdminGate({ isOpen, onClose }) {
     }
     setLoading(true);
     try {
-      const auth = await getAdminAuth();
+      const auth = await getAdminKey();
       const valid = await verifyPassword(key, auth.salt, auth.hash);
       if (valid) {
         setAdmin(true);

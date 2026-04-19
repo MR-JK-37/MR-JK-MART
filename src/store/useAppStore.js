@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getAllApps, getAppById, addApp as dbAddApp, updateApp as dbUpdateApp, deleteApp as dbDeleteApp } from '../firebase/services';
+import { getAllApps, getAppById, createApp as dbAddApp, updateApp as dbUpdateApp, deleteApp as dbDeleteApp } from '../firebase/appService';
 
 const useAppStore = create((set, get) => ({
   // ─── Theme ───

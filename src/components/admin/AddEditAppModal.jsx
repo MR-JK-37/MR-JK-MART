@@ -5,7 +5,7 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
-import { uploadFile, addApp as dbAddApp, updateApp as dbUpdateApp } from '../../firebase/services';
+import { uploadFileWithProgress, createApp as dbAddApp, updateApp as dbUpdateApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const PLATFORMS = [
@@ -189,98 +189,104 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   };
 
   const handleSubmit = async () => {
-    if (!form.name || !form.shortDesc) {
-      toast.error('Name and short description are required');
+    if (!form.name.trim()) {
+      toast.error('App name is required');
       return;
     }
     setPublishing(true);
-    setPublishStep('Uploading icon...');
-    
-    let iconUrl = form.icon, iconPath = editApp?.iconPath || null;
-    let fileUrl = form.downloadUrl, filePath = editApp?.storagePath || null;
-    let previewUrls = [], previewPaths = [];
+    const timestamp = Date.now();
 
     try {
-      // Upload icon
-      if (form.iconFile) {
-        const result = await uploadFile(
+      let iconUrl = editApp?.iconUrl || form.icon || null;
+      let iconPath = editApp?.iconPath || null;
+      let fileUrl = form.downloadUrl || editApp?.downloadUrl || null;
+      let filePath = editApp?.filePath || null;
+      let previewUrls = [];
+      let previewPaths = [];
+
+      // 1. Upload icon
+      if (form.iconFile instanceof File) {
+        setPublishStep('Uploading icon...');
+        const r = await uploadFileWithProgress(
           form.iconFile,
-          `apps/${Date.now()}/icon_${form.iconFile.name}`,
-          (pct) => setIconProgress(pct)
+          `apps/${timestamp}/icon/${form.iconFile.name}`,
+          p => setIconProgress(p)
         );
-        iconUrl = result.url;
-        iconPath = result.path;
+        iconUrl = r.url;
+        iconPath = r.path;
       }
 
-      // Upload preview images
-      setPublishStep('Uploading preview images...');
-      for (const [i, img] of form.previewImages.entries()) {
-        if (img.file) {
-          const result = await uploadFile(
+      // 2. Upload preview images
+      setPublishStep('Uploading previews...');
+      for (let i = 0; i < form.previewImages.length; i++) {
+        const img = form.previewImages[i];
+        if (img.file instanceof File) {
+          const r = await uploadFileWithProgress(
             img.file,
-            `apps/${Date.now()}/preview_${i}_${img.file.name}`,
-            (pct) => setPreviewProgress(pct)
+            `apps/${timestamp}/previews/${i}_${img.file.name}`,
+            p => setPreviewProgress(p)
           );
-          previewUrls.push(result.url);
-          previewPaths.push(result.path);
+          previewUrls.push(r.url);
+          previewPaths.push(r.path);
         } else {
-          // Keep existing strings
+          // It's a URL (existing one)
           previewUrls.push(img.url || img);
+          if (editApp?.previewPaths?.[i]) {
+            previewPaths.push(editApp.previewPaths[i]);
+          }
         }
       }
 
-      // Upload app file (if direct upload, not URL)
-      if (form.appFile && !form.downloadUrl) {
+      // 3. Upload app file (only if no external URL)
+      if (form.appFile instanceof File && !form.downloadUrl) {
         setPublishStep(`Uploading ${form.appFile.name}...`);
-        const result = await uploadFile(
+        const r = await uploadFileWithProgress(
           form.appFile,
-          `apps/${Date.now()}/files/${form.appFile.name}`,
-          (pct) => setFileProgress(pct)
+          `apps/${timestamp}/file/${form.appFile.name}`,
+          p => setFileProgress(p)
         );
-        fileUrl = result.url;
-        filePath = result.path;
+        fileUrl = r.url;
+        filePath = r.path;
       }
 
-      // Save to Firestore
-      setPublishStep('Saving app data...');
+      // 4. Save to Firestore
+      setPublishStep('Saving...');
       const appData = {
-        name: form.name,
-        shortDesc: form.shortDesc,
-        longDesc: form.longDesc,
-        version: form.version,
-        category: form.category,
-        platform: form.platform,
-        icon: iconUrl, 
+        name:         form.name.trim(),
+        shortDesc:    form.shortDesc.trim(),
+        longDesc:     form.longDesc.trim(),
+        version:      form.version.trim() || '1.0.0',
+        category:     form.category,
+        platform:     form.platform,
+        iconUrl,
         iconPath,
-        previewImages: previewUrls, 
+        previewUrls,
         previewPaths,
-        downloadUrl: form.downloadUrl || fileUrl,
-        storagePath: filePath,
-        fileName: form.fileName || null,
-        fileSize: form.fileSize || null,
-        showLikes: form.showLikes,
+        downloadUrl:  fileUrl,
+        filePath,
+        fileName:     form.appFile?.name || editApp?.fileName || null,
+        fileSize:     form.fileSize || editApp?.fileSize || null,
+        showLikes:    form.showLikes,
         showComments: form.showComments,
-        published: form.published,
-        manualSteps: form.manualSteps,
+        published:    form.published,
+        manualSteps:  form.manualSteps,
       };
 
-      if (editApp) {
+      if (editApp?.id) {
         await dbUpdateApp(editApp.id, appData);
-        toast.success('App updated! ✨');
+        toast.success('App updated! ✅');
       } else {
         await dbAddApp(appData);
         toast.success('App published! 🚀');
       }
-      
-      setPublishStep('Done! ✅');
-      setTimeout(() => {
-        setPublishing(false);
-        onClose();
-      }, 500);
 
+      onClose();
     } catch (err) {
-      toast.error('Failed to publish app');
+      console.error('Publish error:', err);
+      toast.error(`Failed: ${err.message}`);
+    } finally {
       setPublishing(false);
+      setPublishStep('');
     }
   };
 

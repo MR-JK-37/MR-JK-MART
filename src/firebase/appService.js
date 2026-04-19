@@ -1,0 +1,171 @@
+import {
+  collection, doc,
+  addDoc, setDoc, updateDoc, deleteDoc,
+  getDocs, getDoc,
+  query, orderBy, where,
+  serverTimestamp, increment
+} from 'firebase/firestore';
+import {
+  ref, uploadBytesResumable,
+  getDownloadURL, deleteObject
+} from 'firebase/storage';
+import { db, storage } from './config';
+
+// ─── APPS ────────────────────────────────────────────────
+
+export async function getAllApps() {
+  const snap = await getDocs(
+    query(collection(db, 'apps'), orderBy('createdAt', 'desc'))
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getPublishedApps() {
+  const snap = await getDocs(
+    query(
+      collection(db, 'apps'),
+      where('published', '==', true),
+      orderBy('createdAt', 'desc')
+    )
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function getAppById(id) {
+  const snap = await getDoc(doc(db, 'apps', id));
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+export async function createApp(data) {
+  const ref = await addDoc(collection(db, 'apps'), {
+    ...data,
+    downloadCount: 0,
+    likeCount: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function updateApp(id, data) {
+  await updateDoc(doc(db, 'apps', id), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteApp(id) {
+  const snap = await getDoc(doc(db, 'apps', id));
+  if (snap.exists()) {
+    const d = snap.data();
+    const paths = [
+      d.iconPath,
+      d.filePath,
+      ...(d.previewPaths || []),
+    ].filter(Boolean);
+    await Promise.allSettled(
+      paths.map(p => deleteObject(ref(storage, p)))
+    );
+  }
+  await deleteDoc(doc(db, 'apps', id));
+}
+
+export async function incrementDownload(id) {
+  await updateDoc(doc(db, 'apps', id), {
+    downloadCount: increment(1),
+  });
+}
+
+export async function toggleLike(id, liked) {
+  await updateDoc(doc(db, 'apps', id), {
+    likeCount: increment(liked ? 1 : -1),
+  });
+}
+
+// ─── FILE UPLOAD ─────────────────────────────────────────
+
+export function uploadFileWithProgress(file, storagePath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const storageRef = ref(storage, storagePath);
+    const task = uploadBytesResumable(storageRef, file);
+    task.on(
+      'state_changed',
+      snap => onProgress && onProgress(
+        Math.round((snap.bytesTransferred / snap.totalBytes) * 100)
+      ),
+      reject,
+      async () => resolve({
+        url:  await getDownloadURL(task.snapshot.ref),
+        path: storagePath,
+      })
+    );
+  });
+}
+
+// ─── COMMENTS ────────────────────────────────────────────
+
+export async function getComments(appId) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'comments'),
+      where('appId', '==', appId),
+      orderBy('createdAt', 'desc')
+    )
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function postComment(appId, authorName, text) {
+  await addDoc(collection(db, 'comments'), {
+    appId, authorName, text,
+    hidden: false,
+    createdAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, 'apps', appId), {
+    commentCount: increment(1),
+  });
+}
+
+export async function setCommentHidden(id, hidden) {
+  await updateDoc(doc(db, 'comments', id), { hidden });
+}
+
+export async function deleteComment(id) {
+  await deleteDoc(doc(db, 'comments', id));
+}
+
+// ─── CONTACTS ────────────────────────────────────────────
+
+export async function submitContact(name, contact, message) {
+  await addDoc(collection(db, 'contacts'), {
+    name, contact, message,
+    read: false,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function getAllContacts() {
+  const snap = await getDocs(
+    query(collection(db, 'contacts'), orderBy('createdAt', 'desc'))
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function markContactRead(id) {
+  await updateDoc(doc(db, 'contacts', id), { read: true });
+}
+
+export async function deleteContact(id) {
+  await deleteDoc(doc(db, 'contacts', id));
+}
+
+// ─── SETTINGS ────────────────────────────────────────────
+
+export async function getSettings(key) {
+  const snap = await getDoc(doc(db, 'settings', key));
+  return snap.exists() ? snap.data() : null;
+}
+
+export async function saveSettings(key, values) {
+  await setDoc(doc(db, 'settings', key), values, { merge: true });
+}

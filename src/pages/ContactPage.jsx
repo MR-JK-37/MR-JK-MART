@@ -7,7 +7,7 @@ import GlassModal from '../components/ui/GlassModal';
 import AdminGate from '../components/admin/AdminGate';
 import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
-import { addContact, getSettings, saveSettings } from '../firebase/services';
+import { submitContact, getSettings, saveSettings } from '../firebase/appService';
 
 export default function ContactPage() {
   const isAdmin = useAppStore(s => s.isAdmin);
@@ -50,7 +50,7 @@ export default function ContactPage() {
       contact: DOMPurify.sanitize(form.contact.trim()),
       message: DOMPurify.sanitize(form.message.trim()),
     };
-    await addContact(sanitized);
+    await submitContact(sanitized.name, sanitized.contact, sanitized.message);
     toast.success('Message sent! 🎉');
     setForm({ name: '', contact: '', message: '' });
     setSending(false);

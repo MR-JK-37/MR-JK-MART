@@ -134,7 +134,7 @@ Then go to **Settings → Pages → Source: gh-pages branch → root folder**
    rules_version = '2';
    service firebase.storage {
      match /b/{bucket}/o {
-       match /apps/{allPaths=**} {
+       match /{allPaths=**} {
          allow read: if true;
          allow write: if true; 
        }
@@ -149,7 +149,7 @@ Then go to **Settings → Pages → Source: gh-pages branch → root folder**
 7. GitHub Actions:
    Add `.env` values to GitHub Secrets:
    GitHub Repo → Settings → Secrets → Actions → New secret
-   Add each `VITE_FIREBASE_*` value
+   Add each `VITE_FB_*` value
 
 ## 📄 License
 

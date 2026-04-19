@@ -5,9 +5,7 @@ import { Download, Heart, Share2, MessageCircle, Calendar, HardDrive, Monitor, T
 import DOMPurify from 'dompurify';
 import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
-import { getAppById, incrementDownload, getComments, addComment, hideComment, deleteComment } from '../firebase/services';
-import { updateDoc, doc, increment } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { getAppById, incrementDownload, getComments, postComment as addComment, setCommentHidden as hideComment, deleteComment, toggleLike } from '../firebase/appService';
 import { decompressFile } from '../utils/fileCompression';
 import GlassCard from '../components/ui/GlassCard';
 import GlassButton from '../components/ui/GlassButton';
@@ -131,16 +129,12 @@ export default function AppDetailPage() {
   const handleLike = async () => {
     const isLiked = localStorage.getItem(`like_${appId}`);
     if (!isLiked) {
-      await updateDoc(doc(db, 'apps', appId), {
-        likeCount: increment(1)
-      });
+      await toggleLike(appId, true);
       localStorage.setItem(`like_${appId}`, 'true');
       setLiked(true);
       setLikeCount(c => c + 1);
     } else {
-      await updateDoc(doc(db, 'apps', appId), {
-        likeCount: increment(-1)
-      });
+      await toggleLike(appId, false);
       localStorage.removeItem(`like_${appId}`);
       setLiked(false);
       setLikeCount(c => Math.max(0, c - 1));
