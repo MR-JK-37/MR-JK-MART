@@ -1,0 +1,48 @@
+import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
+
+export default function GlassModal({ isOpen, onClose, children, title, maxWidth = '500px' }) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+          onClick={onClose}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(20px)' }} />
+
+          {/* Modal */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="relative liquid-glass w-full overflow-y-auto"
+            style={{ maxWidth, maxHeight: '90vh', padding: '28px' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              {title && (
+                <h2 className="font-display text-xl font-bold">{title}</h2>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 rounded-full hover:bg-white/10 transition-colors ml-auto"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {children}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
