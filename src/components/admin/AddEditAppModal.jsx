@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, X, Plus, Link as LinkIcon, GripVertical, Image, Video, Trash2, Save, CheckCircle2 } from 'lucide-react';
 import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
