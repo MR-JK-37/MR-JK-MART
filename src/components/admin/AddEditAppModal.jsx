@@ -5,8 +5,8 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
-import { uploadImage, uploadMultipleImages } from '../../services/cloudinary';
-import { createApp, updateApp } from '../../firebase/appService';
+import { uploadImage, uploadMultipleImages, uploadAppFile, formatFileSize } from '../../services/cloudinary';
+import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const PLATFORMS = [
@@ -39,8 +39,13 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   const [previewProgress, setPreviewProgress] = useState(0);
   const [fileProgress, setFileProgress] = useState(0);
 
-  const [uploadProgress, setUploadProgress] = useState(null);
-  const [uploadStatus, setUploadStatus] = useState('idle');
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedBytes, setUploadedBytes] = useState(0);
+  const [totalBytes, setTotalBytes] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'uploading' | 'done' | 'error'
+  const [uploadMode, setUploadMode] = useState('url'); // 'file' or 'url'
+  const [uploadedFileUrl, setUploadedFileUrl] = useState('');
+  const [externalUrl, setExternalUrl] = useState('');
   const urlInputRef = useRef(null);
 
   useEffect(() => {
@@ -79,8 +84,13 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         iconFile: null, appFile: null
       });
     }
-    setUploadProgress(null);
+    setUploadProgress(0);
+    setUploadedBytes(0);
+    setTotalBytes(0);
     setUploadStatus('idle');
+    setUploadMode(editApp?.downloadUrl ? 'url' : 'url'); // Default to URL for now
+    setExternalUrl(editApp?.downloadUrl || '');
+    setUploadedFileUrl('');
   }, [editApp, isOpen]);
 
   const handleChange = (field, value) => {
@@ -150,6 +160,41 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     handleChange('manualSteps', form.manualSteps.filter((_, i) => i !== index));
   };
 
+  const handleFileSelect = (file) => {
+    setForm(prev => ({ ...prev, appFile: file }));
+    // Auto-fill filename and size
+    handleChange('fileName', file.name);
+    handleChange('fileSize', formatFileSize(file.size));
+  };
+
+
+  const uploadAppFileIfNeeded = async () => {
+    if (uploadMode === 'file' && form.appFile && uploadStatus !== 'done') {
+      setUploadStatus('uploading');
+      setUploadProgress(0);
+      try {
+        const result = await uploadAppFile(
+          form.appFile,
+          (percent, loaded, total) => {
+            setUploadProgress(percent);
+            setUploadedBytes(loaded);
+            setTotalBytes(total);
+            setFileProgress(percent);
+          }
+        );
+        setUploadedFileUrl(result.url);
+        setUploadStatus('done');
+        return result.url;
+      } catch (err) {
+        setUploadStatus('error');
+        throw new Error('File upload failed: ' + err.message);
+      }
+    }
+    if (uploadMode === 'url') return externalUrl;
+    if (uploadStatus === 'done') return uploadedFileUrl;
+    return form.downloadUrl;
+  };
+
   const editStep = (index) => {
     const step = form.manualSteps[index];
     setStepForm({ title: step.title, desc: step.desc, imageBase64: step.imageBase64 || '', videoUrl: step.videoUrl || '' });
@@ -178,7 +223,8 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       published: isPublished, 
       manualSteps, 
       iconFile, 
-      downloadUrl: externalUrl,
+      appFile,
+      downloadUrl: existingDownloadUrl,
       fileName: formFileName,
       fileSize: formFileSize
     } = form;
@@ -188,9 +234,14 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       return;
     }
 
-    // Validate: must have either app file URL or external URL
-    if (!externalUrl.trim()) {
-      toast.error('Please provide a download URL for your app file');
+    // Validate
+    const finalUrl = uploadMode === 'url' ? externalUrl : (uploadStatus === 'done' ? uploadedFileUrl : null);
+    if (uploadMode === 'url' && !externalUrl.trim()) {
+      toast.error('Please provide a download URL');
+      return;
+    }
+    if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
+      toast.error('Please select a file to upload');
       return;
     }
 
@@ -200,6 +251,16 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       let iconUrl = editApp?.iconUrl || form.icon || null;
       let iconPublicId = editApp?.iconPublicId || null;
       let previewUrls = editApp?.previewUrls || [];
+
+      // Upload app file first if needed
+      setPublishStep('Handling app file...');
+      const downloadUrl = await uploadAppFileIfNeeded();
+      
+      if (!downloadUrl) {
+        toast.error('Missing download source');
+        setPublishing(false);
+        return;
+      }
 
       // Upload icon to Cloudinary
       if (iconFile instanceof File) {
@@ -253,7 +314,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
       };
 
       if (editApp?.id) {
-        await updateApp(editApp.id, appData);
+        await updateFirebaseApp(editApp.id, appData);
         toast.success('App updated! ✅');
       } else {
         await createApp(appData);
@@ -432,130 +493,418 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         </div>
 
         <div style={{
-          border: '1px solid rgba(255,255,255,0.15)',
+          border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: '16px',
-          padding: '20px',
-          background: 'rgba(255,255,255,0.04)',
+          overflow: 'hidden',
+          background: 'rgba(255,255,255,0.03)',
         }}>
-          <h3 style={{ color: 'white', marginBottom: '16px', fontSize: '15px' }}>
-            📦 App Download Link
-          </h3>
           
-          {/* Download URL input */}
-          <input
-            type="url"
-            placeholder="https://github.com/MR-JK-37/REPO/releases/download/v1.0/app.exe"
-            value={form.downloadUrl}
-            onChange={e => handleChange('downloadUrl', e.target.value)}
-            style={{
-              width: '100%',
-              padding: '12px 16px',
-              borderRadius: '12px',
-              border: form.downloadUrl 
-                ? '1px solid #7c3aed' 
-                : '1px solid rgba(255,255,255,0.15)',
-              background: 'rgba(255,255,255,0.06)',
-              color: 'white',
-              fontSize: '14px',
-              marginBottom: '12px',
-            }}
-          />
-
-          {/* GitHub releases helper */}
-          <a
-            href="https://github.com/MR-JK-37?tab=repositories"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              marginBottom: '12px',
-              padding: '8px 14px',
-              borderRadius: '8px',
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: 'rgba(255,255,255,0.7)',
-              fontSize: '12px',
-              textDecoration: 'none',
-            }}
-          >
-            🐙 Open GitHub to create release →
-          </a>
-
-          {/* Helper guide */}
+          {/* Tab switcher */}
           <div style={{
-            background: 'rgba(124,58,237,0.1)',
-            border: '1px solid rgba(124,58,237,0.3)',
-            borderRadius: '12px',
-            padding: '14px',
-            fontSize: '13px',
-            color: 'rgba(255,255,255,0.7)',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
           }}>
-            <p style={{ fontWeight: '600', color: '#a78bfa', marginBottom: '8px' }}>
-              📌 How to get a free download link:
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <span className="text-[11px]">🐙 GitHub Releases → github.com/MR-JK-37 → New release → Upload file → Copy download URL</span>
-              <span className="text-[11px]">☁️ Google Drive → Upload → Share → Copy link (set to "Anyone with link")</span>
-              <span className="text-[11px]">📁 MediaFire → mediafire.com → Upload → Copy direct link</span>
-              <span className="text-[11px]">🔥 Mega.nz → mega.nz → Upload → Get link → Copy</span>
-            </div>
+            {[
+              { id: 'file', label: '📁 Upload File' },
+              { id: 'url',  label: '🔗 Paste URL' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setUploadMode(tab.id)}
+                style={{
+                  padding: '14px',
+                  border: 'none',
+                  background: uploadMode === tab.id
+                    ? 'rgba(124,58,237,0.25)'
+                    : 'transparent',
+                  color: uploadMode === tab.id
+                    ? '#a78bfa'
+                    : 'rgba(255,255,255,0.4)',
+                  fontSize: '14px',
+                  fontWeight: uploadMode === tab.id ? '600' : '400',
+                  cursor: 'pointer',
+                  borderBottom: uploadMode === tab.id
+                    ? '2px solid #7c3aed'
+                    : '2px solid transparent',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          {/* File name and size inputs */}
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr 1fr', 
-            gap: '12px',
-            marginTop: '12px' 
-          }}>
-            <input
-              type="text"
-              placeholder="File name (e.g. TaskReminder.exe)"
-              value={form.fileName}
-              onChange={e => handleChange('fileName', e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: 'rgba(255,255,255,0.06)',
-                color: 'white',
-                fontSize: '13px',
-              }}
-            />
-            <input
-              type="text"
-              placeholder="File size (e.g. 45 MB)"
-              value={form.fileSize}
-              onChange={e => handleChange('fileSize', e.target.value)}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.12)',
-                background: 'rgba(255,255,255,0.06)',
-                color: 'white',
-                fontSize: '13px',
-              }}
-            />
-          </div>
+          <div style={{ padding: '20px' }}>
+            
+            {/* FILE UPLOAD TAB */}
+            {uploadMode === 'file' && (
+              <div>
+                
+                {/* Drop zone */}
+                {uploadStatus === 'idle' && !form.appFile && (
+                  <label style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '12px',
+                    padding: '40px 20px',
+                    border: '2px dashed rgba(124,58,237,0.4)',
+                    borderRadius: '14px',
+                    cursor: 'pointer',
+                    background: 'rgba(124,58,237,0.05)',
+                    transition: 'all 0.2s',
+                  }}
+                  onDragOver={e => {
+                    e.preventDefault();
+                    e.currentTarget.style.borderColor = '#7c3aed';
+                    e.currentTarget.style.background = 
+                      'rgba(124,58,237,0.12)';
+                  }}
+                  onDragLeave={e => {
+                    e.currentTarget.style.borderColor = 
+                      'rgba(124,58,237,0.4)';
+                    e.currentTarget.style.background = 
+                      'rgba(124,58,237,0.05)';
+                  }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    const file = e.dataTransfer.files[0];
+                    if (file) handleFileSelect(file);
+                  }}
+                  >
+                    <div style={{ fontSize: '48px' }}>📦</div>
+                    <div style={{ textAlign: 'center' }}>
+                      <p style={{ 
+                        color: 'white', 
+                        fontSize: '15px',
+                        fontWeight: '500',
+                        margin: '0 0 4px' 
+                      }}>
+                        Drop your app file here
+                      </p>
+                      <p style={{ 
+                        color: 'rgba(255,255,255,0.4)', 
+                        fontSize: '13px',
+                        margin: 0
+                      }}>
+                        or click to browse • Any file type supported
+                      </p>
+                    </div>
+                    <span style={{
+                      padding: '8px 20px',
+                      borderRadius: '8px',
+                      background: 'rgba(124,58,237,0.3)',
+                      color: '#a78bfa',
+                      fontSize: '13px',
+                      border: '1px solid rgba(124,58,237,0.4)',
+                    }}>
+                      Browse Files
+                    </span>
+                    <input
+                      type="file"
+                      style={{ display: 'none' }}
+                      accept="*/*"
+                      onChange={e => {
+                        if (e.target.files[0]) {
+                          handleFileSelect(e.target.files[0]);
+                        }
+                      }}
+                    />
+                  </label>
+                )}
 
-          {/* URL validation indicator */}
-          {form.downloadUrl && (
+                {/* File selected — show info */}
+                {form.appFile && uploadStatus === 'idle' && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '14px',
+                    background: 'rgba(255,255,255,0.05)',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}>
+                    <div style={{ fontSize: '32px' }}>📦</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ 
+                        color: 'white', 
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        margin: '0 0 2px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {form.appFile.name}
+                      </p>
+                      <p style={{ 
+                        color: 'rgba(255,255,255,0.5)', 
+                        fontSize: '12px',
+                        margin: 0 
+                      }}>
+                        {formatFileSize(form.appFile.size)}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm(p => ({ ...p, appFile: null }));
+                        setUploadStatus('idle');
+                        setUploadProgress(0);
+                      }}
+                      style={{
+                        background: 'rgba(248,113,113,0.15)',
+                        border: '1px solid rgba(248,113,113,0.3)',
+                        borderRadius: '8px',
+                        color: '#f87171',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✕ Remove
+                    </button>
+                  </div>
+                )}
+
+                {/* Uploading state — progress bar */}
+                {uploadStatus === 'uploading' && (
+                  <div style={{ padding: '8px 0' }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginBottom: '8px',
+                    }}>
+                      <span style={{ 
+                        color: 'rgba(255,255,255,0.7)', 
+                        fontSize: '13px' 
+                      }}>
+                        ⬆️ Uploading {form.appFile?.name}...
+                      </span>
+                      <span style={{ 
+                        color: '#a78bfa', 
+                        fontSize: '13px',
+                        fontWeight: '600',
+                      }}>
+                        {uploadProgress}%
+                      </span>
+                    </div>
+                    
+                    {/* Progress bar */}
+                    <div style={{
+                      height: '8px',
+                      background: 'rgba(255,255,255,0.1)',
+                      borderRadius: '999px',
+                      overflow: 'hidden',
+                    }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${uploadProgress}%`,
+                        background: 
+                          'linear-gradient(90deg, #7c3aed, #06b6d4)',
+                        borderRadius: '999px',
+                        transition: 'width 0.3s ease',
+                      }} />
+                    </div>
+                    
+                    {/* Bytes transferred */}
+                    <p style={{ 
+                      color: 'rgba(255,255,255,0.4)',
+                      fontSize: '12px',
+                      marginTop: '6px',
+                      textAlign: 'right',
+                    }}>
+                      {formatFileSize(uploadedBytes)} / {formatFileSize(totalBytes)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Upload done */}
+                {uploadStatus === 'done' && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '12px 16px',
+                    background: 'rgba(52,211,153,0.1)',
+                    border: '1px solid rgba(52,211,153,0.3)',
+                    borderRadius: '12px',
+                  }}>
+                    <span style={{ fontSize: '20px' }}>✅</span>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ 
+                        color: '#34d399', 
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        margin: '0 0 2px',
+                      }}>
+                        Upload complete!
+                      </p>
+                      <p style={{ 
+                        color: 'rgba(255,255,255,0.4)',
+                        fontSize: '11px',
+                        margin: 0,
+                        wordBreak: 'break-all',
+                      }}>
+                        {uploadedFileUrl}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForm(p => ({ ...p, appFile: null }));
+                        setUploadStatus('idle');
+                        setUploadedFileUrl('');
+                        setUploadProgress(0);
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        borderRadius: '8px',
+                        color: 'rgba(255,255,255,0.5)',
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Change
+                    </button>
+                  </div>
+                )}
+
+                {/* Upload error */}
+                {uploadStatus === 'error' && (
+                  <div style={{
+                    padding: '12px 16px',
+                    background: 'rgba(248,113,113,0.1)',
+                    border: '1px solid rgba(248,113,113,0.3)',
+                    borderRadius: '12px',
+                    color: '#f87171',
+                    fontSize: '13px',
+                  }}>
+                    ❌ Upload failed. Check your connection and try again.
+                    <button
+                      type="button"
+                      onClick={() => setUploadStatus('idle')}
+                      style={{
+                        display: 'block',
+                        marginTop: '8px',
+                        background: 'rgba(248,113,113,0.2)',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: '#f87171',
+                        padding: '4px 12px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                      }}
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* URL TAB */}
+            {uploadMode === 'url' && (
+              <div>
+                <input
+                  type="url"
+                  placeholder="https://github.com/MR-JK-37/REPO/releases/download/v1.0/app.exe"
+                  value={externalUrl}
+                  onChange={e => setExternalUrl(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: externalUrl.startsWith('https://')
+                      ? '1px solid #7c3aed'
+                      : '1px solid rgba(255,255,255,0.12)',
+                    background: 'rgba(255,255,255,0.06)',
+                    color: 'white',
+                    fontSize: '14px',
+                    marginBottom: '12px',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                
+                {externalUrl && (
+                  <p style={{
+                    fontSize: '12px',
+                    color: externalUrl.startsWith('https://')
+                      ? '#34d399' : '#f87171',
+                    marginBottom: '12px',
+                  }}>
+                    {externalUrl.startsWith('https://')
+                      ? '✅ Valid URL' : '⚠️ Must start with https://'}
+                  </p>
+                )}
+
+                <div style={{
+                  background: 'rgba(124,58,237,0.08)',
+                  border: '1px solid rgba(124,58,237,0.2)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  fontSize: '12px',
+                  color: 'rgba(255,255,255,0.5)',
+                }}>
+                  <p style={{ 
+                    color: '#a78bfa', 
+                    fontWeight: '600',
+                    marginBottom: '8px',
+                    fontSize: '13px',
+                  }}>
+                    📌 Free hosting options:
+                  </p>
+                  🐙 GitHub Releases → github.com/MR-JK-37 → 
+                    New release → Upload → Copy URL<br/>
+                  ☁️ Google Drive → Upload → Share → Anyone with link<br/>
+                  📁 MediaFire → mediafire.com → Upload → Direct link<br/>
+                  🔥 Mega.nz → mega.nz → Upload → Get link
+                </div>
+              </div>
+            )}
+
+            {/* File name + size fields */}
             <div style={{
-              marginTop: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '13px',
-              color: form.downloadUrl.startsWith('https://') 
-                ? '#34d399' : '#f87171'
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '10px',
+              marginTop: '14px',
             }}>
-              {form.downloadUrl.startsWith('https://') 
-                ? '✅ Valid URL' 
-                : '⚠️ URL must start with https://'}
+              <input
+                type="text"
+                placeholder="File name (e.g. MyApp.exe)"
+                value={form.fileName}
+                onChange={e => handleChange('fileName', e.target.value)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'white',
+                  fontSize: '13px',
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Size (e.g. 45 MB)"
+                value={form.fileSize}
+                onChange={e => handleChange('fileSize', e.target.value)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'white',
+                  fontSize: '13px',
+                }}
+              />
             </div>
-          )}
+          </div>
         </div>
 
         {/* Visibility Toggles */}
@@ -646,10 +995,4 @@ function ToggleRow({ label, value, onChange }) {
   );
 }
 
-function formatFileSize(bytes) {
-  if (!bytes) return '0 B';
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-}
+
