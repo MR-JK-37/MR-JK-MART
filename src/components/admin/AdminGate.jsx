@@ -6,20 +6,15 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
-import { getAdminKey, saveAdminKey } from '../../db/database';
-import { hashPassword, verifyPassword } from '../../crypto/adminAuth';
+import { verifyAdminKey, hasAdminKey } from '../../crypto/adminAuth';
 
 export default function AdminGate({ isOpen, onClose }) {
   const [step, setStep] = useState(1); // 1 = identity, 2 = key entry
-  const [isSetup, setIsSetup] = useState(false);
   const [key, setKey] = useState('');
-  const [confirmKey, setConfirmKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  const [lockUntil, setLockUntil] = useState(0);
   const [countdown, setCountdown] = useState(0);
 
   const navigate = useNavigate();
@@ -28,49 +23,43 @@ export default function AdminGate({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      checkSetup();
-      loadRateLimit();
       setStep(1);
       setKey('');
-      setConfirmKey('');
       setError('');
+      checkLockout();
     }
   }, [isOpen]);
 
   useEffect(() => {
-    if (lockUntil > Date.now()) {
-      const interval = setInterval(() => {
-        const remaining = Math.ceil((lockUntil - Date.now()) / 1000);
-        if (remaining <= 0) {
-          setCountdown(0);
-          setLockUntil(0);
-          clearInterval(interval);
+    let interval;
+    if (countdown > 0) {
+      interval = setInterval(() => {
+        const lockout = localStorage.getItem('mrjk_lockout');
+        if (lockout) {
+          const remaining = Math.ceil((parseInt(lockout) - Date.now()) / 1000);
+          if (remaining <= 0) {
+            setCountdown(0);
+            localStorage.removeItem('mrjk_lockout');
+            localStorage.removeItem('mrjk_attempts');
+          } else {
+            setCountdown(remaining);
+          }
         } else {
-          setCountdown(remaining);
+          setCountdown(0);
         }
       }, 1000);
-      return () => clearInterval(interval);
     }
-  }, [lockUntil]);
+    return () => clearInterval(interval);
+  }, [countdown]);
 
-  const checkSetup = async () => {
-    const auth = await getAdminKey();
-    setIsSetup(!auth);
-  };
-
-  const loadRateLimit = () => {
-    const stored = localStorage.getItem('mrjk-login-attempts');
-    if (stored) {
-      const data = JSON.parse(stored);
-      setAttempts(data.attempts || 0);
-      if (data.lockUntil && data.lockUntil > Date.now()) {
-        setLockUntil(data.lockUntil);
+  const checkLockout = () => {
+    const lockout = localStorage.getItem('mrjk_lockout');
+    if (lockout) {
+      const remaining = Math.ceil((parseInt(lockout) - Date.now()) / 1000);
+      if (remaining > 0) {
+        setCountdown(remaining);
       }
     }
-  };
-
-  const saveRateLimit = (att, lock) => {
-    localStorage.setItem('mrjk-login-attempts', JSON.stringify({ attempts: att, lockUntil: lock }));
   };
 
   const handleViewer = () => {
@@ -79,64 +68,31 @@ export default function AdminGate({ isOpen, onClose }) {
     navigate('/home');
   };
 
-  const handleSetup = async () => {
-    if (!key || key.length < 4) {
-      setError('Key must be at least 4 characters');
-      return;
-    }
-    if (key !== confirmKey) {
-      setError('Keys do not match');
-      return;
-    }
-    setLoading(true);
-    try {
-      const { salt, hash } = await hashPassword(key);
-      await saveAdminKey(salt, hash);
-      setAdmin(true);
-      toast.success('Admin key set! Welcome, MR!JK! 🔓');
-      onClose();
-      navigate('/admin/home');
-    } catch (err) {
-      setError('Failed to set up key');
-    }
-    setLoading(false);
-  };
-
   const handleLogin = async () => {
-    if (lockUntil > Date.now()) return;
+    if (countdown > 0) return;
     if (!key) {
       setError('Enter your key');
       return;
     }
     setLoading(true);
+    setError('');
     try {
-      const auth = await getAdminKey();
-      const valid = await verifyPassword(key, auth.salt, auth.hash);
+      const valid = await verifyAdminKey(key);
       if (valid) {
         setAdmin(true);
-        setAttempts(0);
-        saveRateLimit(0, 0);
         toast.success('Welcome back, MR!JK! 🔓');
         onClose();
         navigate('/admin/home');
       } else {
-        const newAttempts = attempts + 1;
-        setAttempts(newAttempts);
         setShake(true);
         setTimeout(() => setShake(false), 500);
-        
-        if (newAttempts >= 3) {
-          const lock = Date.now() + 30000;
-          setLockUntil(lock);
-          saveRateLimit(newAttempts, lock);
-          setError(`Too many attempts. Locked for 30 seconds.`);
-        } else {
-          saveRateLimit(newAttempts, 0);
-          setError(`Invalid key (${3 - newAttempts} attempts left)`);
-        }
+        setError('Wrong key. Try again.');
+        setKey('');
+        checkLockout();
       }
     } catch (err) {
-      setError('Authentication error');
+      setError(err.message);
+      checkLockout();
     }
     setLoading(false);
   };
@@ -144,7 +100,6 @@ export default function AdminGate({ isOpen, onClose }) {
   return (
     <GlassModal isOpen={isOpen} onClose={onClose} maxWidth="420px">
       {step === 1 ? (
-        /* Step 1: Identity */
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -173,48 +128,32 @@ export default function AdminGate({ isOpen, onClose }) {
           </div>
         </motion.div>
       ) : (
-        /* Step 2: Key Entry */
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
         >
           <div className="text-center mb-6">
-            <div className="text-4xl mb-3">{isSetup ? '🔐' : '🔑'}</div>
-            <h2 className="font-display text-xl font-bold">
-              {isSetup ? 'Set up your admin key' : 'Enter your key'}
-            </h2>
+            <div className="text-4xl mb-3">🔑</div>
+            <h2 className="font-display text-xl font-bold">Enter Admin Key</h2>
           </div>
 
           <motion.div animate={shake ? { x: [-10, 10, -10, 10, 0] } : {}} transition={{ duration: 0.4 }}>
-            <div className="space-y-4">
-              <div className="relative">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={key}
-                  onChange={(e) => { setKey(e.target.value); setError(''); }}
-                  placeholder={isSetup ? 'Create admin key' : 'Enter admin key'}
-                  className="glass-input pr-12 font-mono"
-                  onKeyDown={(e) => e.key === 'Enter' && (isSetup ? handleSetup() : handleLogin())}
-                  disabled={lockUntil > Date.now()}
-                />
-                <button
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 opacity-50 hover:opacity-100"
-                >
-                  {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-
-              {isSetup && (
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={confirmKey}
-                  onChange={(e) => { setConfirmKey(e.target.value); setError(''); }}
-                  placeholder="Confirm admin key"
-                  className="glass-input font-mono"
-                  onKeyDown={(e) => e.key === 'Enter' && handleSetup()}
-                />
-              )}
+            <div className="relative">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={key}
+                onChange={(e) => { setKey(e.target.value); setError(''); }}
+                placeholder="Enter admin key"
+                className="glass-input pr-12 font-mono"
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                disabled={countdown > 0}
+              />
+              <button
+                onClick={() => setShowKey(!showKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 opacity-50 hover:opacity-100"
+              >
+                {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </motion.div>
 
@@ -237,8 +176,8 @@ export default function AdminGate({ isOpen, onClose }) {
           )}
 
           <GlassButton
-            onClick={isSetup ? handleSetup : handleLogin}
-            disabled={loading || lockUntil > Date.now()}
+            onClick={handleLogin}
+            disabled={loading || countdown > 0}
             className="w-full mt-6 flex items-center justify-center gap-2 py-3"
           >
             {loading ? (
@@ -246,7 +185,7 @@ export default function AdminGate({ isOpen, onClose }) {
             ) : (
               <>
                 <Unlock size={18} />
-                {isSetup ? 'Set Key & Enter' : 'Unlock'}
+                Unlock
               </>
             )}
           </GlassButton>
