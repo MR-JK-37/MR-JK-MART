@@ -11,14 +11,7 @@ import {
 } from 'firebase/storage';
 import { db, storage } from './config';
 
-// ─── APPS ────────────────────────────────────────────────
-
-export async function getAllApps() {
-  const snap = await getDocs(
-    query(collection(db, 'apps'), orderBy('createdAt', 'desc'))
-  );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
-}
+// ── APPS ─────────────────────────────────────────────────
 
 export async function getPublishedApps() {
   const snap = await getDocs(
@@ -31,20 +24,28 @@ export async function getPublishedApps() {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+export async function getAllApps() {
+  const snap = await getDocs(
+    query(collection(db, 'apps'), orderBy('createdAt', 'desc'))
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
 export async function getAppById(id) {
   const snap = await getDoc(doc(db, 'apps', id));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
 export async function createApp(data) {
-  const ref = await addDoc(collection(db, 'apps'), {
+  const docRef = await addDoc(collection(db, 'apps'), {
     ...data,
     downloadCount: 0,
     likeCount: 0,
+    commentCount: 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
-  return ref.id;
+  return docRef.id;
 }
 
 export async function updateApp(id, data) {
@@ -55,17 +56,21 @@ export async function updateApp(id, data) {
 }
 
 export async function deleteApp(id) {
-  const snap = await getDoc(doc(db, 'apps', id));
-  if (snap.exists()) {
-    const d = snap.data();
-    const paths = [
-      d.iconPath,
-      d.filePath,
-      ...(d.previewPaths || []),
-    ].filter(Boolean);
-    await Promise.allSettled(
-      paths.map(p => deleteObject(ref(storage, p)))
-    );
+  try {
+    const snap = await getDoc(doc(db, 'apps', id));
+    if (snap.exists()) {
+      const d = snap.data();
+      const paths = [
+        d.iconPath,
+        d.filePath,
+        ...(d.previewPaths || []),
+      ].filter(Boolean);
+      await Promise.allSettled(
+        paths.map(p => deleteObject(ref(storage, p)))
+      );
+    }
+  } catch (e) {
+    console.warn('Storage cleanup error:', e);
   }
   await deleteDoc(doc(db, 'apps', id));
 }
@@ -76,33 +81,36 @@ export async function incrementDownload(id) {
   });
 }
 
-export async function toggleLike(id, liked) {
+export async function toggleLike(id, isLiking) {
   await updateDoc(doc(db, 'apps', id), {
-    likeCount: increment(liked ? 1 : -1),
+    likeCount: increment(isLiking ? 1 : -1),
   });
 }
 
-// ─── FILE UPLOAD ─────────────────────────────────────────
+// ── FILE UPLOAD WITH PROGRESS ─────────────────────────────
 
-export function uploadFileWithProgress(file, storagePath, onProgress) {
+export function uploadFileWithProgress(file, path, onProgress) {
   return new Promise((resolve, reject) => {
-    const storageRef = ref(storage, storagePath);
+    const storageRef = ref(storage, path);
     const task = uploadBytesResumable(storageRef, file);
     task.on(
       'state_changed',
-      snap => onProgress && onProgress(
-        Math.round((snap.bytesTransferred / snap.totalBytes) * 100)
-      ),
-      reject,
-      async () => resolve({
-        url:  await getDownloadURL(task.snapshot.ref),
-        path: storagePath,
-      })
+      snapshot => {
+        const pct = Math.round(
+          (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+        );
+        if (onProgress) onProgress(pct);
+      },
+      error => reject(error),
+      async () => {
+        const url = await getDownloadURL(task.snapshot.ref);
+        resolve({ url, path });
+      }
     );
   });
 }
 
-// ─── COMMENTS ────────────────────────────────────────────
+// ── COMMENTS ─────────────────────────────────────────────
 
 export async function getComments(appId) {
   const snap = await getDocs(
@@ -134,7 +142,7 @@ export async function deleteComment(id) {
   await deleteDoc(doc(db, 'comments', id));
 }
 
-// ─── CONTACTS ────────────────────────────────────────────
+// ── CONTACTS ─────────────────────────────────────────────
 
 export async function submitContact(name, contact, message) {
   await addDoc(collection(db, 'contacts'), {
@@ -159,7 +167,7 @@ export async function deleteContact(id) {
   await deleteDoc(doc(db, 'contacts', id));
 }
 
-// ─── SETTINGS ────────────────────────────────────────────
+// ── SETTINGS ─────────────────────────────────────────────
 
 export async function getSettings(key) {
   const snap = await getDoc(doc(db, 'settings', key));
