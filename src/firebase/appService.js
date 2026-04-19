@@ -5,11 +5,7 @@ import {
   query, orderBy, where,
   serverTimestamp, increment
 } from 'firebase/firestore';
-import {
-  ref, uploadBytesResumable,
-  getDownloadURL, deleteObject
-} from 'firebase/storage';
-import { db, storage } from './config';
+import { db } from './config';
 
 // ── APPS ─────────────────────────────────────────────────
 
@@ -56,22 +52,7 @@ export async function updateApp(id, data) {
 }
 
 export async function deleteApp(id) {
-  try {
-    const snap = await getDoc(doc(db, 'apps', id));
-    if (snap.exists()) {
-      const d = snap.data();
-      const paths = [
-        d.iconPath,
-        d.filePath,
-        ...(d.previewPaths || []),
-      ].filter(Boolean);
-      await Promise.allSettled(
-        paths.map(p => deleteObject(ref(storage, p)))
-      );
-    }
-  } catch (e) {
-    console.warn('Storage cleanup error:', e);
-  }
+  // Cloudinary deletion handled separately or skipped for now
   await deleteDoc(doc(db, 'apps', id));
 }
 
@@ -84,29 +65,6 @@ export async function incrementDownload(id) {
 export async function toggleLike(id, isLiking) {
   await updateDoc(doc(db, 'apps', id), {
     likeCount: increment(isLiking ? 1 : -1),
-  });
-}
-
-// ── FILE UPLOAD WITH PROGRESS ─────────────────────────────
-
-export function uploadFileWithProgress(file, path, onProgress) {
-  return new Promise((resolve, reject) => {
-    const storageRef = ref(storage, path);
-    const task = uploadBytesResumable(storageRef, file);
-    task.on(
-      'state_changed',
-      snapshot => {
-        const pct = Math.round(
-          (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-        );
-        if (onProgress) onProgress(pct);
-      },
-      error => reject(error),
-      async () => {
-        const url = await getDownloadURL(task.snapshot.ref);
-        resolve({ url, path });
-      }
-    );
   });
 }
 

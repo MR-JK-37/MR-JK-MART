@@ -5,7 +5,8 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
-import { uploadFileWithProgress, createApp, updateApp } from '../../firebase/appService';
+import { uploadImage, uploadMultipleImages } from '../../services/cloudinary';
+import { createApp, updateApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const PLATFORMS = [
@@ -40,7 +41,6 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
 
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadStatus, setUploadStatus] = useState('idle');
-  const [fileTier, setFileTier] = useState(0);
   const urlInputRef = useRef(null);
 
   useEffect(() => {
@@ -78,7 +78,6 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         published: true, manualSteps: [],
         iconFile: null, appFile: null
       });
-      setFileTier(0);
     }
     setUploadProgress(null);
     setUploadStatus('idle');
@@ -118,29 +117,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     }));
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
 
-    handleChange('fileName', file.name);
-    handleChange('fileSize', formatFileSize(file.size));
-    
-    // Tier 3: > 500MB
-    if (file.size > 500 * 1024 * 1024) {
-      setFileTier(3);
-      setForm(p => ({ ...p, appFile: null, fileData: null }));
-      setTimeout(() => urlInputRef.current?.focus(), 100);
-      return;
-    }
-    
-    setFileTier(1);
-    setForm(p => ({ ...p, appFile: file, fileData: true }));
-  };
-
-  const removeFile = () => {
-    setForm(prev => ({ ...prev, fileData: null, appFile: null, fileName: '', fileSize: '' }));
-    setFileTier(0);
-  };
 
 
 
@@ -189,62 +166,73 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   };
 
   const handleSubmit = async () => {
-    const { name: formName, shortDesc: formShortDesc, longDesc: formLongDesc, version: formVersion, category: formCategory, platform: selectedPlatforms, showLikes, showComments, published: isPublished, manualSteps, iconFile, appFile, downloadUrl: externalUrl } = form;
+    const { 
+      name: formName, 
+      shortDesc: formShortDesc, 
+      longDesc: formLongDesc, 
+      version: formVersion, 
+      category: formCategory, 
+      platform: selectedPlatforms, 
+      showLikes, 
+      showComments, 
+      published: isPublished, 
+      manualSteps, 
+      iconFile, 
+      downloadUrl: externalUrl,
+      fileName: formFileName,
+      fileSize: formFileSize
+    } = form;
 
     if (!formName.trim()) {
-      toast.error('App name required'); 
+      toast.error('App name required');
       return;
     }
+
+    // Validate: must have either app file URL or external URL
+    if (!externalUrl.trim()) {
+      toast.error('Please provide a download URL for your app file');
+      return;
+    }
+
     setPublishing(true);
-    const ts = Date.now();
 
     try {
       let iconUrl = editApp?.iconUrl || form.icon || null;
-      let iconPath = editApp?.iconPath || null;
-      let fileUrl = externalUrl?.trim() || null;
-      let filePath = editApp?.filePath || null;
-      let previewUrls = [];
-      let previewPaths = [];
+      let iconPublicId = editApp?.iconPublicId || null;
+      let previewUrls = editApp?.previewUrls || [];
 
+      // Upload icon to Cloudinary
       if (iconFile instanceof File) {
         setPublishStep('Uploading icon...');
-        const r = await uploadFileWithProgress(
-          iconFile,
-          `apps/${ts}/icon/${iconFile.name}`,
-          p => setIconProgress(p)
-        );
-        iconUrl = r.url; iconPath = r.path;
+        setIconProgress(0);
+        const result = await uploadImage(iconFile, 'mrjk-mart/icons');
+        iconUrl = result.url;
+        iconPublicId = result.publicId;
+        setIconProgress(100);
       }
 
-      for (let i = 0; i < form.previewImages.length; i++) {
-        setPublishStep(`Uploading preview ${i+1}...`);
-        const img = form.previewImages[i];
-        if (img.file instanceof File) {
-          const r = await uploadFileWithProgress(
-            img.file,
-            `apps/${ts}/previews/${i}_${img.file.name}`,
-            p => setPreviewProgress(p)
-          );
-          previewUrls.push(r.url);
-          previewPaths.push(r.path);
-        } else {
-          // It's a URL or base64 string from existing
-          previewUrls.push(img.url || img);
-          if (editApp?.previewPaths?.[i]) previewPaths.push(editApp.previewPaths[i]);
-        }
-      }
+      // Upload preview images to Cloudinary
+      const newPreviews = form.previewImages.filter(p => p.file instanceof File).map(p => p.file);
+      const existingUrls = form.previewImages.filter(p => !(p.file instanceof File)).map(p => p.url || p);
 
-      if (appFile instanceof File && !externalUrl) {
-        setPublishStep(`Uploading ${appFile.name}...`);
-        const r = await uploadFileWithProgress(
-          appFile,
-          `apps/${ts}/file/${appFile.name}`,
-          p => setFileProgress(p)
+      if (newPreviews.length > 0) {
+        setPublishStep('Uploading preview images...');
+        const results = await uploadMultipleImages(
+          newPreviews,
+          'mrjk-mart/previews',
+          (i, total) => {
+            setPreviewProgress(Math.round((i / total) * 100));
+          }
         );
-        fileUrl = r.url; filePath = r.path;
+        previewUrls = [
+          ...existingUrls,
+          ...results.map(r => r.url)
+        ];
+        setPreviewProgress(100);
       }
 
       setPublishStep('Saving to database...');
+
       const appData = {
         name:         formName.trim(),
         shortDesc:    formShortDesc.trim(),
@@ -252,12 +240,12 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         version:      formVersion || '1.0.0',
         category:     formCategory,
         platform:     selectedPlatforms,
-        iconUrl,      iconPath,
-        previewUrls,  previewPaths,
-        downloadUrl:  fileUrl,
-        filePath,
-        fileName:     appFile?.name || editApp?.fileName || null,
-        fileSize:     appFile?.size || editApp?.fileSize || null,
+        iconUrl,
+        iconPublicId,
+        previewUrls,
+        downloadUrl:  externalUrl.trim(),
+        fileName:     formFileName?.trim() || null,
+        fileSize:     formFileSize || null,
         showLikes:    showLikes,
         showComments: showComments,
         published:    isPublished,
@@ -274,8 +262,8 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
 
       onClose();
     } catch (err) {
-      console.error(err);
-      toast.error(`Error: ${err.message}`);
+      console.error('Publish error:', err);
+      toast.error(`Failed: ${err.message}`);
     } finally {
       setPublishing(false);
       setPublishStep('');
@@ -443,127 +431,131 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
           </div>
         </div>
 
-        {/* Tiered App File UI */}
-        <div className="mt-6 border-t border-white/10 pt-6">
-          <label className="block text-xs font-medium opacity-60 mb-2">App File</label>
-          {form.fileData || form.fileHandle || form.fileName ? (
-            <div className="glass p-4 rounded-xl relative overflow-hidden flex flex-col gap-2 shadow-inner bg-black/20" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-              <div className="flex items-center justify-between z-10 w-full relative">
-                 <div className="flex items-center gap-3">
-                    <span className="text-3xl opacity-80">📦</span>
-                    <div className="max-w-[180px] sm:max-w-[300px]">
-                      <div className="text-sm font-semibold truncate">{form.fileName}</div>
-                      <div className="text-xs opacity-60">Size: {form.fileSize}</div>
-                    </div>
-                 </div>
-                 <button onClick={removeFile} className="hover:bg-red-500/20 text-red-400 p-2 rounded-lg transition-colors absolute right-0 top-0">
-                   <X size={16} />
-                 </button>
-              </div>
+        <div style={{
+          border: '1px solid rgba(255,255,255,0.15)',
+          borderRadius: '16px',
+          padding: '20px',
+          background: 'rgba(255,255,255,0.04)',
+        }}>
+          <h3 style={{ color: 'white', marginBottom: '16px', fontSize: '15px' }}>
+            📦 App Download Link
+          </h3>
+          
+          {/* Download URL input */}
+          <input
+            type="url"
+            placeholder="https://github.com/MR-JK-37/REPO/releases/download/v1.0/app.exe"
+            value={form.downloadUrl}
+            onChange={e => handleChange('downloadUrl', e.target.value)}
+            style={{
+              width: '100%',
+              padding: '12px 16px',
+              borderRadius: '12px',
+              border: form.downloadUrl 
+                ? '1px solid #7c3aed' 
+                : '1px solid rgba(255,255,255,0.15)',
+              background: 'rgba(255,255,255,0.06)',
+              color: 'white',
+              fontSize: '14px',
+              marginBottom: '12px',
+            }}
+          />
 
-              {/* Status Badge */}
-              <div className="mt-2 z-10 flex flex-wrap gap-2">
-                {fileTier === 1 && <span className="glass-pill bg-green-500/20 text-green-300 text-[10px] font-bold tracking-wide uppercase px-3">Stored locally</span>}
-                {fileTier === 2 && <span className="glass-pill bg-yellow-500/20 text-yellow-300 text-[10px] font-bold tracking-wide uppercase px-3">Large file — use URL recommended</span>}
-                {fileTier === 3 && <span className="glass-pill bg-red-500/20 text-red-300 text-[10px] font-bold tracking-wide uppercase px-3">Too large — URL required</span>}
-                {form.compressed && (
-                  <span className="glass-pill bg-blue-500/20 text-blue-300 text-[10px] font-bold px-3">
-                    Original: {formatFileSize(form.originalSize)} → Stored: {formatFileSize(form.compressedSize)} (saved {form.compressionRatio}%)
-                  </span>
-                )}
-              </div>
+          {/* GitHub releases helper */}
+          <a
+            href="https://github.com/MR-JK-37?tab=repositories"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              marginBottom: '12px',
+              padding: '8px 14px',
+              borderRadius: '8px',
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: 'rgba(255,255,255,0.7)',
+              fontSize: '12px',
+              textDecoration: 'none',
+            }}
+          >
+            🐙 Open GitHub to create release →
+          </a>
 
-              {/* Animated Progress Bar */}
-              {(uploadStatus === 'reading' || uploadStatus === 'compressing') && fileTier === 1 && (
-                <div className="mt-3 z-10">
-                  <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5 relative">
-                    {uploadStatus === 'reading' ? (
-                      <motion.div 
-                        className="h-full gradient-bg" 
-                        initial={{ width: 0 }}
-                        animate={{ width: `${uploadProgress}%` }} 
-                        transition={{ ease: "easeOut", duration: 0.2 }}
-                      />
-                    ) : (
-                      <motion.div 
-                        className="h-full bg-blue-400 absolute left-0" 
-                        initial={{ left: '-100%', width: '100%' }}
-                        animate={{ left: '100%' }} 
-                        transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-                      />
-                    )}
-                  </div>
-                  <div className="text-xs opacity-60 mt-1.5 font-mono">
-                    {uploadStatus === 'reading' ? `Reading file... ${Math.round(uploadProgress)}%` : 'Compressing file (gzip)...'}
-                  </div>
-                </div>
-              )}
+          {/* Helper guide */}
+          <div style={{
+            background: 'rgba(124,58,237,0.1)',
+            border: '1px solid rgba(124,58,237,0.3)',
+            borderRadius: '12px',
+            padding: '14px',
+            fontSize: '13px',
+            color: 'rgba(255,255,255,0.7)',
+          }}>
+            <p style={{ fontWeight: '600', color: '#a78bfa', marginBottom: '8px' }}>
+              📌 How to get a free download link:
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span className="text-[11px]">🐙 GitHub Releases → github.com/MR-JK-37 → New release → Upload file → Copy download URL</span>
+              <span className="text-[11px]">☁️ Google Drive → Upload → Share → Copy link (set to "Anyone with link")</span>
+              <span className="text-[11px]">📁 MediaFire → mediafire.com → Upload → Copy direct link</span>
+              <span className="text-[11px]">🔥 Mega.nz → mega.nz → Upload → Get link → Copy</span>
             </div>
-          ) : (
-            <label className="glass p-6 rounded-xl flex flex-col items-center justify-center gap-3 cursor-pointer hover:bg-white/10 transition-all border border-dashed border-white/20 hover:border-white/40">
-              <Upload size={28} className="opacity-40 mb-1" />
-              <span className="text-sm font-semibold text-center">Choose your app file <span className="opacity-50 font-normal">(any size)</span></span>
-              <span className="text-[11px] opacity-40 text-center uppercase tracking-wider max-w-[200px] leading-relaxed">
-                Under 100MB stored locally • Larger files need an external URL
-              </span>
-              <input type="file" onChange={handleFileUpload} className="hidden" />
-            </label>
-          )}
+          </div>
 
-          {/* Tier 3 Error Message */}
-          <AnimatePresence>
-            {fileTier === 3 && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0, scale: 0.95 }}
-                animate={{ opacity: 1, height: 'auto', scale: 1 }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-sm overflow-hidden"
-              >
-                <span className="text-xl">⚠️</span>
-                <div className="text-red-200 opacity-90">
-                  <p className="font-semibold mb-2">This file is too large for browser storage.</p>
-                  <p className="text-xs opacity-80 leading-relaxed font-mono">
-                    Please upload it to a file host and paste the download URL below.<br/><br/>
-                    • github.com/YOUR_REPO/releases/new<br/>
-                    • drive.google.com (set link to public)<br/>
-                    • mediafire.com / mega.io
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* External Download URL Section */}
-        <div className="mt-8 mb-4 p-4 rounded-xl bg-black/10 border border-white/5">
-          <label className="block text-sm mb-3">
-            <span className="opacity-50 text-xs uppercase tracking-wider mr-2 font-bold">OR</span>
-            <span className="gradient-text font-semibold">Use External Download Link</span>
-            <span className="text-xs opacity-40 ml-2 block sm:inline mt-1 sm:mt-0">(recommended for large files)</span>
-          </label>
-          <div className="flex items-center gap-2 relative">
-            <LinkIcon size={16} className="opacity-40 absolute left-3 pointer-events-none" />
-            <input 
-              ref={urlInputRef}
-              value={form.downloadUrl} 
-              onChange={e => handleChange('downloadUrl', e.target.value)} 
-              className="glass-input flex-1 pl-10 pr-10" 
-              placeholder="https://..." 
-              style={{ borderColor: form.downloadUrl.startsWith('https://') ? 'rgba(74, 222, 128, 0.4)' : '' }}
+          {/* File name and size inputs */}
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: '1fr 1fr', 
+            gap: '12px',
+            marginTop: '12px' 
+          }}>
+            <input
+              type="text"
+              placeholder="File name (e.g. TaskReminder.exe)"
+              value={form.fileName}
+              onChange={e => handleChange('fileName', e.target.value)}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(255,255,255,0.06)',
+                color: 'white',
+                fontSize: '13px',
+              }}
             />
-            {form.downloadUrl.startsWith('https://') && (
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="absolute right-3 text-green-400">
-                <CheckCircle2 size={16} />
-              </motion.div>
-            )}
+            <input
+              type="text"
+              placeholder="File size (e.g. 45 MB)"
+              value={form.fileSize}
+              onChange={e => handleChange('fileSize', e.target.value)}
+              style={{
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.12)',
+                background: 'rgba(255,255,255,0.06)',
+                color: 'white',
+                fontSize: '13px',
+              }}
+            />
           </div>
-          <div className="flex flex-wrap gap-2 mt-3 pl-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">GitHub</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">Drive</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">Mega</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1">MediaFire</span>
-            <span className="text-[10px] uppercase font-bold tracking-wider opacity-30 glass-pill px-2.5 py-1 shadow-inner bg-white/5 border-white/10 text-white">Direct Link</span>
-          </div>
+
+          {/* URL validation indicator */}
+          {form.downloadUrl && (
+            <div style={{
+              marginTop: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              fontSize: '13px',
+              color: form.downloadUrl.startsWith('https://') 
+                ? '#34d399' : '#f87171'
+            }}>
+              {form.downloadUrl.startsWith('https://') 
+                ? '✅ Valid URL' 
+                : '⚠️ URL must start with https://'}
+            </div>
+          )}
         </div>
 
         {/* Visibility Toggles */}
