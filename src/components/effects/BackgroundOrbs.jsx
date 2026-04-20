@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import useAppStore from '../../store/useAppStore';
 
@@ -18,7 +19,17 @@ const lightOrbs = [
 
 export default function BackgroundOrbs() {
   const theme = useAppStore(s => s.theme);
-  const orbSet = theme === 'dark' ? orbs : lightOrbs;
+  const [isMobile, setIsMobile] = useState(false);
+  const baseOrbs = theme === 'dark' ? orbs : lightOrbs;
+  const orbSet = isMobile ? baseOrbs.slice(0, 2) : baseOrbs;
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsMobile(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
@@ -29,14 +40,14 @@ export default function BackgroundOrbs() {
             position: 'absolute',
             left: orb.x,
             top: orb.y,
-            width: orb.size,
-            height: orb.size,
+            width: isMobile ? Math.min(orb.size, 260) : orb.size,
+            height: isMobile ? Math.min(orb.size, 260) : orb.size,
             borderRadius: '50%',
             background: orb.color,
-            filter: 'blur(80px)',
+            filter: isMobile ? 'blur(42px)' : 'blur(80px)',
             transform: 'translate(-50%, -50%)',
           }}
-          animate={{
+          animate={isMobile ? undefined : {
             y: [0, -30, 0, 30, 0],
             x: [0, 20, 0, -20, 0],
             scale: [1, 1.1, 1, 0.95, 1],

@@ -29,9 +29,8 @@ export default function AppDetailPage() {
   const [activePreview, setActivePreview] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comments, setComments] = useState([]);
-  const [userName, setUserName] = useState(() => localStorage.getItem('mrjk_commenter_name') || '');
+  const [userName, setUserName] = useState('');
   const [commentText, setCommentText] = useState('');
-  const [step, setStep] = useState(() => localStorage.getItem('mrjk_commenter_name') ? 'comment' : 'name');
   const [commentCount, setCommentCount] = useState(0);
   const iconUrl = app?.iconUrl || app?.icon || '';
   const previewUrls = useMemo(
@@ -43,14 +42,7 @@ export default function AppDetailPage() {
     loadApp();
     loadLikeState();
     loadComments();
-    const savedName = localStorage.getItem('mrjk_commenter_name');
-    if (savedName) {
-      setUserName(savedName);
-      setStep('comment');
-    } else {
-      setUserName('');
-      setStep('name');
-    }
+    setUserName(localStorage.getItem('mrjk_commenter_name') || '');
   }, [appId]);
 
   useEffect(() => {
@@ -83,13 +75,15 @@ export default function AppDetailPage() {
   };
 
   const loadComments = async () => {
-    const list = await getComments(appId);
-    // Show all comments to users, filter hidden for non-admin
-    const visible = isAdmin 
-      ? list 
-      : list.filter(c => !c.hidden);
-    setComments(visible);
-    setCommentCount(list.filter(c => !c.hidden).length);
+    try {
+      const list = await getComments(appId);
+      setComments(list);
+      setCommentCount(list.length);
+    } catch (err) {
+      setComments([]);
+      setCommentCount(0);
+      toast.error('Could not load comments right now.');
+    }
   };
 
   const handleDownload = async () => {
@@ -185,17 +179,13 @@ export default function AppDetailPage() {
     }
   };
 
-  const handleSetName = () => {
-    if (!userName.trim()) return;
-    const name = userName.trim();
-    localStorage.setItem('mrjk_commenter_name', name);
-    setUserName(name);
-    setStep('comment');
-  };
-
   const handlePostComment = async () => {
+    if (!userName.trim()) {
+      toast.info('Please enter your name first.');
+      return;
+    }
     if (!commentText.trim()) return;
-    const name = userName.trim() || 'Anonymous';
+    const name = userName.trim();
     
     try {
       const sanitized = DOMPurify.sanitize(commentText.trim());
@@ -583,12 +573,10 @@ export default function AppDetailPage() {
         onClose={() => setCommentsOpen(false)}
         comments={comments}
         commentCount={commentCount}
-        step={step}
         userName={userName}
         setUserName={setUserName}
         commentText={commentText}
         setCommentText={setCommentText}
-        onSetName={handleSetName}
         onPost={handlePostComment}
         isAdmin={isAdmin}
         onHide={handleHideComment}
@@ -629,7 +617,7 @@ function ActionChip({ onClick, icon, label, active = false }) {
   );
 }
 
-function CommentsModal({ isOpen, onClose, comments, commentCount, step, userName, setUserName, commentText, setCommentText, onSetName, onPost, isAdmin, onHide, onDelete }) {
+function CommentsModal({ isOpen, onClose, comments, commentCount, userName, setUserName, commentText, setCommentText, onPost, isAdmin, onHide, onDelete }) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -665,47 +653,27 @@ function CommentsModal({ isOpen, onClose, comments, commentCount, step, userName
 
             {/* Input */}
             <div className="p-4 border-b border-white/10">
-              {step === 'name' ? (
+              <div className="space-y-3">
+                <input
+                  value={userName}
+                  onChange={e => setUserName(e.target.value)}
+                  className="glass-input"
+                  placeholder="Your name"
+                />
                 <div className="flex gap-2">
-                  <input
-                    value={userName}
-                    onChange={e => setUserName(e.target.value)}
-                    className="glass-input flex-1"
-                    placeholder="What's your name?"
-                    onKeyDown={e => e.key === 'Enter' && onSetName()}
+                  <textarea
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    className="glass-input flex-1 resize-none"
+                    rows={2}
+                    placeholder="Write a comment..."
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onPost(); } }}
                   />
-                  <GlassButton onClick={onSetName} className="px-4 text-sm">Continue</GlassButton>
+                  <GlassButton onClick={onPost} className="px-3 self-end">
+                    <Send size={16} />
+                  </GlassButton>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-xs opacity-60">
-                    <span>Commenting as {userName || 'Anonymous'}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUserName('');
-                        setStep('name');
-                      }}
-                      className="hover:opacity-100 opacity-70"
-                    >
-                      Change
-                    </button>
-                  </div>
-                  <div className="flex gap-2">
-                    <textarea
-                      value={commentText}
-                      onChange={e => setCommentText(e.target.value)}
-                      className="glass-input flex-1 resize-none"
-                      rows={2}
-                      placeholder="Write a comment..."
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onPost(); } }}
-                    />
-                    <GlassButton onClick={onPost} className="px-3 self-end">
-                      <Send size={16} />
-                    </GlassButton>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* Comments List */}

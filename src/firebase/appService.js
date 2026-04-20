@@ -86,31 +86,20 @@ export async function toggleLike(id, isLiking) {
 
 export async function getComments(appId) {
   try {
-    // Try with orderBy first (needs index)
     const q = query(
       collection(db, 'comments'),
-      where('appId', '==', appId),
-      orderBy('createdAt', 'desc')
+      where('appId', '==', appId)
     );
     const snap = await getDocs(q);
-    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    return snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const ta = a.createdAt?.seconds || 0;
+        const tb = b.createdAt?.seconds || 0;
+        return tb - ta;
+      });
   } catch (err) {
-    if (err.code === 'failed-precondition') {
-      // Index not created yet — fallback without orderBy
-      console.warn('Index missing, using fallback query');
-      const q2 = query(
-        collection(db, 'comments'),
-        where('appId', '==', appId)
-      );
-      const snap2 = await getDocs(q2);
-      return snap2.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => {
-          const ta = a.createdAt?.seconds || 0;
-          const tb = b.createdAt?.seconds || 0;
-          return tb - ta;
-        });
-    }
+    console.error('Failed to load comments:', err);
     throw err;
   }
 }
@@ -121,9 +110,13 @@ export async function postComment(appId, authorName, text) {
     hidden: false,
     createdAt: serverTimestamp(),
   });
-  await updateDoc(doc(db, 'apps', appId), {
-    commentCount: increment(1),
-  });
+  try {
+    await updateDoc(doc(db, 'apps', appId), {
+      commentCount: increment(1),
+    });
+  } catch (err) {
+    console.warn('Comment saved, but comment count was not updated:', err);
+  }
 }
 
 export async function setCommentHidden(id, hidden) {

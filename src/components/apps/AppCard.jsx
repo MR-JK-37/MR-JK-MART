@@ -50,12 +50,12 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
       transition={{ delay: index * 0.05, type: 'spring', stiffness: 200 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
-      className="relative h-full"
+      className="app-card relative h-full"
     >
       <GlassCard
         liquid
         onClick={handleClick}
-        className="p-6 flex flex-col text-left relative overflow-hidden gradient-border h-full min-h-[360px]"
+        className="p-5 sm:p-6 flex flex-col text-left relative overflow-hidden gradient-border h-full min-h-[320px] sm:min-h-[360px]"
         style={{
           background: isHovered
             ? 'linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06))'
@@ -147,7 +147,7 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
             ))}
           </div>
 
-          <div className="mt-auto flex items-center justify-between rounded-2xl px-4 py-3 bg-black/15 border border-white/10">
+          <div className="app-card-footer mt-auto flex items-center justify-between rounded-2xl px-4 py-3 bg-black/15 border border-white/10">
             <div className="flex items-center gap-2 text-sm opacity-75">
               <Download size={14} className="text-cyan-300" />
               <span>{app.downloadCount || 0} downloads</span>

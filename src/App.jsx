@@ -73,6 +73,10 @@ class AdminErrorBoundary extends React.Component {
 function AnimatedRoutes() {
   const location = useLocation();
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
