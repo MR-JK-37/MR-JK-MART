@@ -4,8 +4,7 @@ import { Upload, X, Plus, GripVertical, Image, Trash2, Save } from 'lucide-react
 import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useToastStore from '../../store/useToastStore';
-import { uploadImage, uploadMultipleImages, formatFileSize } from '../../services/cloudinary';
-import { uploadAppFile } from '../../firebase/storageService';
+import { uploadImage, uploadMultipleImages, uploadAppFile, formatFileSize } from '../../services/cloudinary';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 import { getAppVersion } from '../../utils/versionCheck';
 
@@ -80,8 +79,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       setUploadStatus('idle');
       setUploadError('');
       setUploadProgress(0);
+      setUploadedBytes(0);
+      setTotalBytes(0);
       setIconProgress(0);
       setPreviewProgress(0);
+      setFileProgress(0);
     } else {
       // Reset ALL fields for new app
       setForm({
@@ -96,8 +98,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       setUploadStatus('idle');
       setUploadError('');
       setUploadProgress(0);
+      setUploadedBytes(0);
+      setTotalBytes(0);
       setIconProgress(0);
       setPreviewProgress(0);
+      setFileProgress(0);
     }
   }, [editingApp, isOpen]);
 
@@ -228,6 +233,8 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       setUploadStatus('uploading');
       setUploadError('');
       setUploadProgress(0);
+      setUploadedBytes(0);
+      setTotalBytes(form.appFile.size);
       try {
         const result = await uploadAppFile(
           form.appFile,
@@ -243,6 +250,8 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         return result.url;
       } catch (err) {
         setUploadStatus('error');
+        setUploadProgress(0);
+        setFileProgress(0);
         setUploadError(err.message || 'File upload failed');
         throw new Error(err.message || 'File upload failed');
       }
@@ -623,7 +632,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   fontSize: '12px',
                   fontWeight: 600,
                 }}>
-                  Upload backend: Firebase Storage · version {getAppVersion()}
+                  Upload backend: Cloudinary · version {getAppVersion()}
                 </p>
                 
                 {/* Drop zone */}
@@ -674,7 +683,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        Large APK and app files supported
+                        Stored in Cloudinary raw file storage
                       </p>
                     </div>
                     <span style={{
@@ -871,7 +880,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     color: '#f87171',
                     fontSize: '13px',
                   }}>
-                    ❌ {uploadError || 'Upload failed. Check Firebase Storage rules and try again.'}
+                    ❌ {uploadError || 'Cloudinary upload failed. Check your Cloudinary upload preset and account limits.'}
                     <button
                       type="button"
                       onClick={() => {
