@@ -4,7 +4,8 @@ import { Upload, X, Plus, GripVertical, Image, Trash2, Save } from 'lucide-react
 import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useToastStore from '../../store/useToastStore';
-import { uploadImage, uploadMultipleImages, uploadAppFile, formatFileSize } from '../../services/cloudinary';
+import { uploadImage, uploadMultipleImages, formatFileSize } from '../../services/cloudinary';
+import { uploadAppFile } from '../../firebase/storageService';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
@@ -40,6 +41,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'uploading' | 'done' | 'error'
+  const [uploadError, setUploadError] = useState('');
   const [uploadMode, setUploadMode] = useState('url'); // 'file' or 'url'
   const [uploadedFileUrl, setUploadedFileUrl] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
@@ -75,6 +77,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       setExternalUrl(editingApp.downloadUrl || '');
       setUploadedFileUrl('');
       setUploadStatus('idle');
+      setUploadError('');
       setUploadProgress(0);
       setIconProgress(0);
       setPreviewProgress(0);
@@ -90,6 +93,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       setExternalUrl('');
       setUploadedFileUrl('');
       setUploadStatus('idle');
+      setUploadError('');
       setUploadProgress(0);
       setIconProgress(0);
       setPreviewProgress(0);
@@ -207,6 +211,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const handleFileSelect = (file) => {
     setForm(prev => ({ ...prev, appFile: file }));
     setUploadStatus('idle');
+    setUploadError('');
     setUploadedFileUrl('');
     setUploadProgress(0);
     setUploadedBytes(0);
@@ -220,6 +225,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const uploadAppFileIfNeeded = async () => {
     if (uploadMode === 'file' && form.appFile && uploadStatus !== 'done') {
       setUploadStatus('uploading');
+      setUploadError('');
       setUploadProgress(0);
       try {
         const result = await uploadAppFile(
@@ -236,7 +242,8 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         return result.url;
       } catch (err) {
         setUploadStatus('error');
-        throw new Error('File upload failed: ' + err.message);
+        setUploadError(err.message || 'File upload failed');
+        throw new Error(err.message || 'File upload failed');
       }
     }
     if (uploadMode === 'url') return externalUrl;
@@ -658,7 +665,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        Any size supported
+                        Large APK and app files supported
                       </p>
                     </div>
                     <span style={{
@@ -721,6 +728,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       onClick={() => {
                         setForm(p => ({ ...p, appFile: null }));
                         setUploadStatus('idle');
+                        setUploadError('');
                         setUploadProgress(0);
                       }}
                       style={{
@@ -825,6 +833,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       onClick={() => {
                         setForm(p => ({ ...p, appFile: null }));
                         setUploadStatus('idle');
+                        setUploadError('');
                         setUploadedFileUrl('');
                         setUploadProgress(0);
                       }}
@@ -853,10 +862,13 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     color: '#f87171',
                     fontSize: '13px',
                   }}>
-                    ❌ Upload failed. Check your connection and try again.
+                    ❌ {uploadError || 'Upload failed. Check Firebase Storage rules and try again.'}
                     <button
                       type="button"
-                      onClick={() => setUploadStatus('idle')}
+                      onClick={() => {
+                        setUploadStatus('idle');
+                        setUploadError('');
+                      }}
                       style={{
                         display: 'block',
                         marginTop: '8px',
@@ -1062,4 +1074,3 @@ function ToggleRow({ label, value, onChange }) {
     </div>
   );
 }
-
