@@ -3,6 +3,7 @@ const UPLOAD_PRESET = 'mrjk_mart';    // create this in Cloudinary
 const CLOUDINARY_RAW_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/raw/upload`;
 const APP_FILE_FOLDER = 'mrjk-mart/apps';
 const STALLED_UPLOAD_TIMEOUT_MS = 45000;
+export const CLOUDINARY_RAW_FILE_LIMIT_BYTES = 10 * 1024 * 1024;
 
 export async function uploadImage(file, folder = 'mrjk-mart') {
     const formData = new FormData();
@@ -54,6 +55,11 @@ function getCloudinaryErrorMessage(responseText) {
   }
 }
 
+export function getCloudinaryRawLimitMessage(file) {
+  const fileSize = file?.size ? formatFileSize(file.size) : 'This file';
+  return `${fileSize} is larger than the Cloudinary raw upload limit on this account. Use Paste URL for APK files above 10 MB, or increase the Cloudinary raw file limit.`;
+}
+
 function getRawPublicId(file) {
   const fallbackName = `application-file-${Date.now()}`;
   const safeFileName = (file.name || fallbackName)
@@ -67,6 +73,9 @@ function getRawPublicId(file) {
 
 export async function uploadAppFile(file, onProgress) {
   if (!file) throw new Error('No file selected');
+  if (file.size > CLOUDINARY_RAW_FILE_LIMIT_BYTES) {
+    throw new Error(getCloudinaryRawLimitMessage(file));
+  }
 
   return new Promise((resolve, reject) => {
     const formData = new FormData();

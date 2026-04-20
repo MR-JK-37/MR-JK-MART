@@ -4,7 +4,14 @@ import { Upload, X, Plus, GripVertical, Image, Trash2, Save } from 'lucide-react
 import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useToastStore from '../../store/useToastStore';
-import { uploadImage, uploadMultipleImages, uploadAppFile, formatFileSize } from '../../services/cloudinary';
+import {
+  CLOUDINARY_RAW_FILE_LIMIT_BYTES,
+  getCloudinaryRawLimitMessage,
+  uploadImage,
+  uploadMultipleImages,
+  uploadAppFile,
+  formatFileSize
+} from '../../services/cloudinary';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 import { getAppVersion } from '../../utils/versionCheck';
 
@@ -47,6 +54,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const [externalUrl, setExternalUrl] = useState('');
   const iconInputRef = useRef(null);
   const previewInputRef = useRef(null);
+  const selectedAppFileTooLarge = form.appFile?.size > CLOUDINARY_RAW_FILE_LIMIT_BYTES;
 
   useEffect(() => {
     if (editingApp) {
@@ -225,6 +233,14 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     // Auto-fill filename and size
     handleChange('fileName', file.name);
     handleChange('fileSize', formatFileSize(file.size));
+
+    if (file.size > CLOUDINARY_RAW_FILE_LIMIT_BYTES) {
+      const message = getCloudinaryRawLimitMessage(file);
+      setUploadStatus('error');
+      setUploadError(message);
+      setUploadProgress(0);
+      toast.error(message);
+    }
   };
 
 
@@ -306,6 +322,13 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     }
     if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
       toast.error('Please select a file to upload');
+      return;
+    }
+    if (uploadMode === 'file' && appFile?.size > CLOUDINARY_RAW_FILE_LIMIT_BYTES) {
+      const message = getCloudinaryRawLimitMessage(appFile);
+      setUploadStatus('error');
+      setUploadError(message);
+      toast.error(message);
       return;
     }
 
@@ -634,6 +657,14 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 }}>
                   Upload backend: Cloudinary · version {getAppVersion()}
                 </p>
+                <p style={{
+                  margin: '0 0 14px',
+                  color: 'rgba(255,255,255,0.48)',
+                  fontSize: '12px',
+                  lineHeight: 1.5,
+                }}>
+                  Cloudinary raw upload limit: {formatFileSize(CLOUDINARY_RAW_FILE_LIMIT_BYTES)}. For larger APK files, use Paste URL.
+                </p>
                 
                 {/* Drop zone */}
                 {uploadStatus === 'idle' && !form.appFile && (
@@ -881,9 +912,36 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     fontSize: '13px',
                   }}>
                     ❌ {uploadError || 'Cloudinary upload failed. Check your Cloudinary upload preset and account limits.'}
+                    {selectedAppFileTooLarge && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadMode('url');
+                          setUploadStatus('idle');
+                          setUploadError('');
+                        }}
+                        style={{
+                          display: 'block',
+                          marginTop: '10px',
+                          background: 'rgba(52,211,153,0.18)',
+                          border: '1px solid rgba(52,211,153,0.34)',
+                          borderRadius: '6px',
+                          color: '#34d399',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                        }}
+                      >
+                        Use Paste URL
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
+                        if (selectedAppFileTooLarge) {
+                          setForm(p => ({ ...p, appFile: null }));
+                        }
                         setUploadStatus('idle');
                         setUploadError('');
                       }}
@@ -899,7 +957,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '12px',
                       }}
                     >
-                      Try Again
+                      {selectedAppFileTooLarge ? 'Choose Different File' : 'Try Again'}
                     </button>
                   </div>
                 )}
