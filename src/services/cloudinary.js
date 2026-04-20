@@ -54,12 +54,15 @@ function getCloudinaryErrorMessage(responseText) {
   }
 }
 
-function getUploadName(file) {
-  return (file.name || 'application-file')
-    .replace(/\.[^/.]+$/, '')
+function getRawPublicId(file) {
+  const fallbackName = `application-file-${Date.now()}`;
+  const safeFileName = (file.name || fallbackName)
     .replace(/[^a-zA-Z0-9._-]/g, '-')
     .replace(/-+/g, '-')
+    .replace(/^\.+/, '')
     .slice(0, 120);
+
+  return `${Date.now()}-${safeFileName || fallbackName}`;
 }
 
 export async function uploadAppFile(file, onProgress) {
@@ -69,11 +72,8 @@ export async function uploadAppFile(file, onProgress) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
-    formData.append('resource_type', 'raw');
     formData.append('folder', APP_FILE_FOLDER);
-    formData.append('public_id', `${Date.now()}-${getUploadName(file)}`);
-    formData.append('use_filename', 'true');
-    formData.append('unique_filename', 'true');
+    formData.append('public_id', getRawPublicId(file));
 
     const xhr = new XMLHttpRequest();
     let settled = false;
