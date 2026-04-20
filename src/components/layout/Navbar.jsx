@@ -40,8 +40,8 @@ export default function Navbar() {
         initial={{ y: -100 }}
         animate={{ y: (isSplash && !scrolled) ? -100 : 0 }}
         transition={{ type: 'spring', stiffness: 200, damping: 30 }}
-        className="fixed top-4 left-4 right-4 z-[100] glass"
-        style={{ borderRadius: 16, padding: '12px 24px' }}
+        className="fixed top-4 left-4 right-4 z-[100] liquid-glass border border-white/10 shadow-2xl"
+        style={{ borderRadius: 20, padding: '10px 24px' }}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo */}
@@ -53,7 +53,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Links */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-10">
             {navLinks.map(link => (
               <NavLink key={link.path} to={link.path} label={link.label} location={location} theme={theme} />
             ))}
@@ -179,24 +179,36 @@ export default function Navbar() {
 }
 
 function NavLink({ to, label, location, theme }) {
-  const isActive = location.pathname === to || location.pathname.startsWith(to + '/');
+  const isActive = to === '/' 
+    ? location.pathname === '/' 
+    : location.pathname.startsWith(to);
+    
   return (
-    <Link
-      to={to}
-      className={`relative font-body text-sm font-medium no-underline transition-colors pb-1 ${
-        isActive
-          ? 'gradient-text'
-          : theme === 'dark'
-            ? 'text-gray-300 hover:text-white'
-            : 'text-gray-600 hover:text-gray-900'
-      }`}
-    >
-      {label}
+    <Link to={to} className="relative group no-underline">
+      <motion.span
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        className={`relative z-10 font-display text-[13px] font-bold tracking-wider uppercase transition-all duration-300 ${
+          isActive 
+            ? 'text-white' 
+            : theme === 'dark' ? 'text-white/40 hover:text-white' : 'text-black/40 hover:text-black'
+        }`}
+        style={{
+          textShadow: isActive ? '0 0 15px rgba(124, 58, 237, 0.6)' : 'none'
+        }}
+      >
+        {label}
+        {isActive && (
+          <motion.div
+            layoutId="navUnderline"
+            className="absolute -bottom-1 left-0 right-0 h-[2px] gradient-bg rounded-full"
+          />
+        )}
+      </motion.span>
       {isActive && (
         <motion.div
-          layoutId="navIndicator"
-          className="absolute bottom-0 left-0 right-0 h-0.5 gradient-bg rounded-full"
-          transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+          layoutId="navGlow"
+          className="absolute -inset-x-4 -inset-y-2 bg-violet-600/15 blur-lg rounded-full z-0"
         />
       )}
     </Link>

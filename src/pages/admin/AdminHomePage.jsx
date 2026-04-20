@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, AppWindow, Download, MessageCircle, Mail } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
-import { getAllApps, getAllContacts } from '../../firebase/appService';
+import { getAllApps, getAllContacts, deleteApp } from '../../firebase/appService';
+import useToastStore from '../../store/useToastStore';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import AppGrid from '../../components/apps/AppGrid';
@@ -13,11 +14,13 @@ import GlassCard from '../../components/ui/GlassCard';
 export default function AdminHomePage() {
   const [apps, setApps] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingApp, setEditingApp] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const [stats, setStats] = useState({ apps: 0, downloads: 0, comments: 0, contacts: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const showToast = useToastStore(s => s.show) || ((type, msg) => alert(msg));
 
   const loadData = async () => {
     try {
@@ -46,6 +49,32 @@ export default function AdminHomePage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleEditApp = (app) => {
+    setEditingApp(app);
+    setShowModal(true);
+  };
+
+  const handleAddNew = () => {
+    setEditingApp(null);
+    setShowModal(true);
+  };
+
+  const handleDeleteApp = async (appId, appName) => {
+    const confirmed = window.confirm(
+      `Delete "${appName}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    
+    try {
+      await deleteApp(appId);
+      showToast('success', `"${appName}" deleted`);
+      await loadData(); // refresh list
+    } catch (err) {
+      showToast('error', 'Delete failed: ' + err.message);
+      console.error('Delete error:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -105,13 +134,18 @@ export default function AdminHomePage() {
       </div>
 
       {/* App Grid */}
-      <AppGrid apps={apps} title="📦 All Apps (including drafts)" />
+      <AppGrid 
+        apps={apps} 
+        title="📦 All Apps (including drafts)" 
+        onEdit={handleEditApp}
+        onDelete={handleDeleteApp}
+      />
 
       {/* FAB */}
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
-        onClick={() => setShowAddModal(true)}
+        onClick={handleAddNew}
         className="fixed bottom-8 right-8 w-14 h-14 rounded-full gradient-bg flex items-center justify-center text-white shadow-lg z-50"
         style={{ boxShadow: '0 8px 24px rgba(124,58,237,0.4)' }}
       >
@@ -120,8 +154,13 @@ export default function AdminHomePage() {
 
       {/* Add App Modal */}
       <AddEditAppModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        isOpen={showModal}
+        onClose={() => {
+          setShowModal(false);
+          setEditingApp(null);
+        }}
+        editingApp={editingApp}
+        onRefresh={loadData}
       />
     </motion.div>
   );

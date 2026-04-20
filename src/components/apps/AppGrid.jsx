@@ -1,6 +1,6 @@
 import AppCard from './AppCard';
 
-export default function AppGrid({ apps = [], title = '' }) {
+export default function AppGrid({ apps = [], title = '', onEdit, onDelete }) {
   if (!apps.length) {
     return (
       <div className="text-center py-20">
@@ -15,9 +15,15 @@ export default function AppGrid({ apps = [], title = '' }) {
       {title && (
         <h2 className="font-display text-2xl font-bold mb-6">{title}</h2>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 items-stretch">
         {apps.map((app, i) => (
-          <AppCard key={app.id} app={app} index={i} />
+          <AppCard 
+            key={app.id} 
+            app={app} 
+            index={i} 
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
         ))}
       </div>
     </div>

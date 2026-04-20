@@ -19,7 +19,7 @@ const PLATFORMS = [
   { id: 'web',     label: 'Web',     icon: '🌐' },
 ];
 
-export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
+export default function AddEditAppModal({ isOpen, onClose, editingApp = null, onRefresh }) {
   const addApp = useAppStore(s => s.addApp);
   const updateApp = useAppStore(s => s.updateApp);
   const toast = useToastStore();
@@ -49,34 +49,35 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   const [externalUrl, setExternalUrl] = useState('');
   const [fileError, setFileError] = useState('');
   const urlInputRef = useRef(null);
+  const iconInputRef = useRef(null);
+  const previewInputRef = useRef(null);
 
   useEffect(() => {
-    if (editApp) {
+    if (editingApp) {
       setForm({
-        name: editApp.name || '',
-        shortDesc: editApp.shortDesc || '',
-        longDesc: editApp.longDesc || '',
-        version: editApp.version || '1.0.0',
-        category: editApp.category || 'Utility',
-        platform: editApp.platform || [],
-        icon: editApp.icon || '',
-        previewImages: editApp.previewImages || [],
-        fileData: editApp.fileData || null,
-        fileHandle: editApp.fileHandle || null,
-        downloadUrl: editApp.downloadUrl || '',
-        fileName: editApp.fileName || '',
-        fileSize: editApp.fileSize || '',
-        showLikes: editApp.showLikes !== false,
-        showComments: editApp.showComments !== false,
-        published: editApp.published !== false,
-        manualSteps: editApp.manualSteps || [],
+        name: editingApp.name || '',
+        shortDesc: editingApp.shortDesc || '',
+        longDesc: editingApp.longDesc || '',
+        version: editingApp.version || '1.0.0',
+        category: editingApp.category || 'Utility',
+        platform: editingApp.platform || [],
+        icon: editingApp.iconUrl || editingApp.icon || '', // support both names
+        previewImages: editingApp.previewUrls || editingApp.previewImages || [],
+        fileData: editingApp.fileData || null,
+        fileHandle: editingApp.fileHandle || null,
+        downloadUrl: editingApp.downloadUrl || '',
+        fileName: editingApp.fileName || '',
+        fileSize: editingApp.fileSize || '',
+        showLikes: editingApp.showLikes ?? true,
+        showComments: editingApp.showComments ?? true,
+        published: editingApp.published ?? true,
+        manualSteps: editingApp.manualSteps || [],
         iconFile: null, appFile: null
       });
-      let initialTier = 0;
-      if (editApp.downloadUrl) initialTier = 3;
-      if (editApp.storagePath) initialTier = 1;
-      setFileTier(initialTier);
+      setUploadMode('url');
+      setExternalUrl(editingApp.downloadUrl || '');
     } else {
+      // Reset ALL fields for new app
       setForm({
         name: '', shortDesc: '', longDesc: '', version: '1.0.0',
         category: 'Utility', platform: [], icon: '',
@@ -85,16 +86,13 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         published: true, manualSteps: [],
         iconFile: null, appFile: null
       });
+      setExternalUrl('');
+      setUploadedFileUrl('');
+      setUploadStatus('idle');
+      setUploadProgress(0);
+      setFileError('');
     }
-    setUploadProgress(0);
-    setUploadedBytes(0);
-    setTotalBytes(0);
-    setUploadStatus('idle');
-    setUploadMode(editApp?.downloadUrl ? 'url' : 'url'); // Default to URL for now
-    setExternalUrl(editApp?.downloadUrl || '');
-    setUploadedFileUrl('');
-    setFileError('');
-  }, [editApp, isOpen]);
+  }, [editingApp, isOpen]);
 
   const handleChange = (field, value) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -165,11 +163,6 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
 
   const handleFileSelect = (file) => {
     setFileError('');
-    if (file.size > MAX_RAW_SIZE) {
-      setFileError('File size exceeds Cloudinary 10MB limit for free accounts.');
-      // Don't set the file, force user to see the error
-      return;
-    }
     setForm(prev => ({ ...prev, appFile: file }));
     // Auto-fill filename and size
     handleChange('fileName', file.name);
@@ -201,7 +194,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     }
     if (uploadMode === 'url') return externalUrl;
     if (uploadStatus === 'done') return uploadedFileUrl;
-    return form.downloadUrl;
+    return form.downloadUrl || editingApp?.downloadUrl;
   };
 
   const editStep = (index) => {
@@ -261,9 +254,9 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
     setPublishing(true);
 
     try {
-      let iconUrl = editApp?.iconUrl || form.icon || null;
-      let iconPublicId = editApp?.iconPublicId || null;
-      let previewUrls = editApp?.previewUrls || [];
+      let iconUrl = editingApp?.iconUrl || form.icon || null;
+      let iconPublicId = editingApp?.iconPublicId || null;
+      let previewUrls = editingApp?.previewUrls || [];
 
       // Upload app file first if needed
       setPublishStep('Handling app file...');
@@ -326,13 +319,17 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         manualSteps:  manualSteps,
       };
 
-      if (editApp?.id) {
-        await updateFirebaseApp(editApp.id, appData);
+      if (editingApp && editingApp.id) {
+        // UPDATE existing — do NOT create new
+        await updateFirebaseApp(editingApp.id, appData);
         toast.success('App updated! ✅');
       } else {
+        // CREATE new
         await createApp(appData);
         toast.success('App published! 🚀');
       }
+
+      if (onRefresh) onRefresh();
 
       onClose();
     } catch (err) {
@@ -345,7 +342,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
   };
 
   return (
-    <GlassModal isOpen={isOpen} onClose={onClose} title={editApp ? 'Edit App' : 'Add New App'} maxWidth="600px">
+    <GlassModal isOpen={isOpen} onClose={onClose} title={editingApp ? 'Edit App' : 'Add New App'} maxWidth="600px">
       <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-2">
         {/* Basic Info */}
         <div>
@@ -468,19 +465,37 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
         <div>
           <label className="block text-xs font-medium opacity-60 mb-2">App Icon</label>
           <div className="flex items-center gap-4">
-            {form.icon ? (
-              <div className="relative">
-                <img src={form.icon} alt="Icon" className="w-20 h-20 rounded-2xl object-cover" />
-                <button onClick={() => handleChange('icon', '')} className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500 text-white">
-                  <X size={12} />
-                </button>
-              </div>
-            ) : (
-              <label className="w-20 h-20 rounded-2xl glass flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors">
-                <Upload size={24} className="opacity-40" />
-                <input type="file" accept="image/*" onChange={handleIconUpload} className="hidden" />
-              </label>
-            )}
+            <div 
+              onClick={() => iconInputRef.current?.click()}
+              className="cursor-pointer"
+            >
+              {form.icon ? (
+                <div className="relative">
+                  <img src={form.icon} alt="Icon" className="w-20 h-20 rounded-2xl object-cover" />
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleChange('icon', '');
+                    }} 
+                    className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500 text-white"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-2xl glass flex items-center justify-center hover:bg-white/10 transition-colors">
+                  <Upload size={24} className="opacity-40" />
+                  <span className="sr-only">Upload Icon</span>
+                </div>
+              )}
+            </div>
+            <input
+              ref={iconInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleIconUpload}
+            />
           </div>
         </div>
 
@@ -497,10 +512,23 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
               </div>
             ))}
             {form.previewImages.length < 10 && (
-              <label className="w-20 h-20 rounded-xl glass flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors">
-                <Plus size={20} className="opacity-40" />
-                <input type="file" accept="image/*" multiple onChange={handlePreviewUpload} className="hidden" />
-              </label>
+              <>
+                <button 
+                  type="button"
+                  onClick={() => previewInputRef.current?.click()}
+                  className="w-20 h-20 rounded-xl glass flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors"
+                >
+                  <Plus size={20} className="opacity-40" />
+                </button>
+                <input
+                  ref={previewInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={handlePreviewUpload}
+                />
+              </>
             )}
           </div>
         </div>
@@ -603,7 +631,7 @@ export default function AddEditAppModal({ isOpen, onClose, editApp = null }) {
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        Max 10MB for direct upload
+                        Any size supported
                       </p>
                     </div>
                     <span style={{

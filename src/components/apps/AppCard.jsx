@@ -5,7 +5,7 @@ import { Download, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
 import GlassCard from '../ui/GlassCard';
 
-export default function AppCard({ app, index = 0 }) {
+export default function AppCard({ app, index = 0, onEdit, onDelete }) {
   const navigate = useNavigate();
   const isAdmin = useAppStore(s => s.isAdmin);
   const deleteApp = useAppStore(s => s.deleteApp);
@@ -23,7 +23,9 @@ export default function AppCard({ app, index = 0 }) {
 
   const handleDelete = async (e) => {
     e.stopPropagation();
-    if (window.confirm(`Delete "${app.name}"? This cannot be undone.`)) {
+    if (onDelete) {
+      onDelete(app.id, app.name);
+    } else if (window.confirm(`Delete "${app.name}"? This cannot be undone.`)) {
       await deleteApp(app.id);
     }
     setShowMenu(false);
@@ -31,7 +33,11 @@ export default function AppCard({ app, index = 0 }) {
 
   const handleEdit = (e) => {
     e.stopPropagation();
-    navigate(`/admin/edit-app/${app.id}`);
+    if (onEdit) {
+      onEdit(app);
+    } else {
+      navigate(`/admin/edit-app/${app.id}`);
+    }
     setShowMenu(false);
   };
 
@@ -42,12 +48,12 @@ export default function AppCard({ app, index = 0 }) {
       transition={{ delay: index * 0.05, type: 'spring', stiffness: 200 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
-      className="relative"
+      className="relative h-full"
     >
       <GlassCard
         liquid
         onClick={handleClick}
-        className="p-6 flex flex-col items-center text-center relative overflow-hidden gradient-border"
+        className="p-6 flex flex-col items-center text-center relative overflow-hidden gradient-border h-full min-h-[320px]"
       >
         {/* Admin Menu */}
         {isAdmin && (
@@ -82,6 +88,13 @@ export default function AppCard({ app, index = 0 }) {
           </div>
         )}
 
+        {/* Draft Badge */}
+        {isAdmin && app.published === false && (
+          <div className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-md bg-yellow-500/20 text-yellow-400 text-[10px] font-bold uppercase tracking-wider">
+            Draft
+          </div>
+        )}
+
         {/* App Icon */}
         <motion.div
           animate={{ scale: isHovered ? 1.05 : 1 }}
@@ -100,8 +113,15 @@ export default function AppCard({ app, index = 0 }) {
           )}
         </motion.div>
 
-        {/* App Name */}
-        <h3 className="font-display text-lg font-bold mb-1 line-clamp-1">{app.name}</h3>
+        {/* App Name & Platform */}
+        <div style={{ marginBottom: '4px' }}>
+          <h3 className="font-display text-lg font-bold line-clamp-1">{app.name}</h3>
+          <div className="flex justify-center gap-1 mt-1">
+            {(app.platform || []).map(p => (
+              <span key={p} className="text-[10px] opacity-40 uppercase tracking-tighter">{p}</span>
+            ))}
+          </div>
+        </div>
 
         {/* Description */}
         <p className="text-sm opacity-60 font-body mb-3 line-clamp-2">{app.shortDesc}</p>
@@ -110,9 +130,9 @@ export default function AppCard({ app, index = 0 }) {
         <span className="glass-pill text-xs mb-2">v{app.version || '1.0.0'}</span>
 
         {/* Download Count */}
-        <div className="flex items-center gap-1 text-xs opacity-40">
-          <Download size={12} />
-          <span>{app.downloadCount || 0} downloads</span>
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] opacity-60">
+          <Download size={12} className="text-violet-400" />
+          <span>{app.downloadCount || 0}</span>
         </div>
 
         {/* Hover Reveal */}

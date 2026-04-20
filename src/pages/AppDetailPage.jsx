@@ -31,11 +31,13 @@ export default function AppDetailPage() {
   const [commentText, setCommentText] = useState('');
   const [nameSet, setNameSet] = useState(false);
 
+  const [commentCount, setCommentCount] = useState(0);
+
   useEffect(() => {
     loadApp();
     loadLikeState();
     loadComments();
-    const savedName = localStorage.getItem('mrjk-comment-name');
+    const savedName = localStorage.getItem('mrjk_commenter_name');
     if (savedName) {
       setCommentName(savedName);
       setNameSet(true);
@@ -56,8 +58,13 @@ export default function AppDetailPage() {
   };
 
   const loadComments = async () => {
-    const data = await getComments(appId);
-    setComments(data);
+    const list = await getComments(appId);
+    // Show all comments to users, filter hidden for non-admin
+    const visible = isAdmin 
+      ? list 
+      : list.filter(c => !c.hidden);
+    setComments(visible);
+    setCommentCount(list.filter(c => !c.hidden).length);
   };
 
   const handleDownload = async () => {
@@ -155,17 +162,25 @@ export default function AppDetailPage() {
 
   const handleSetName = () => {
     if (!commentName.trim()) return;
-    localStorage.setItem('mrjk-comment-name', commentName.trim());
+    const name = commentName.trim();
+    localStorage.setItem('mrjk_commenter_name', name);
     setNameSet(true);
   };
 
   const handlePostComment = async () => {
     if (!commentText.trim()) return;
-    const sanitized = DOMPurify.sanitize(commentText.trim());
-    await addComment(appId, commentName, sanitized);
-    setCommentText('');
-    loadComments();
-    toast.success('Comment posted! 💬');
+    const name = commentName.trim() || 'Anonymous';
+    
+    try {
+      const sanitized = DOMPurify.sanitize(commentText.trim());
+      await addComment(appId, name, sanitized);
+      localStorage.setItem('mrjk_commenter_name', name);
+      setCommentText('');
+      await loadComments(); // refresh
+      toast.success('Comment posted! 💬');
+    } catch (err) {
+      toast.error('Failed to post: ' + err.message);
+    }
   };
 
   const handleHideComment = async (id) => {
@@ -197,134 +212,200 @@ export default function AppDetailPage() {
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      className="max-w-5xl mx-auto px-4 md:px-8 pt-28 pb-16"
-    >
-      {/* Hero Section */}
-      <div className="liquid-glass p-6 md:p-8 mb-8" style={{ borderRadius: 24 }}>
-        <div className="flex flex-col md:flex-row items-start gap-6">
-          {/* App Icon */}
-          <div className="w-28 h-28 rounded-3xl overflow-hidden flex-shrink-0 glass flex items-center justify-center"
-            style={{ border: '2px solid rgba(255,255,255,0.15)' }}>
+    <div className="relative min-h-screen">
+      {/* Premium Back Header */}
+      <div className="absolute top-0 left-0 right-0 h-[400px] overflow-hidden z-0">
+        <div className="absolute inset-0 bg-black/60 z-10" />
+        <img 
+          src={app.icon} 
+          className="w-full h-full object-cover blur-3xl scale-150 opacity-40" 
+          alt="" 
+        />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-black to-transparent z-20" />
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0 }}
+        className="max-w-5xl mx-auto px-4 md:px-8 pt-20 pb-16 relative z-10"
+      >
+        {/* App Hero Section */}
+        <div className="flex flex-col items-center text-center mb-12">
+          {/* Centralized Icon */}
+          <motion.div 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] overflow-hidden mb-6 glass-border shadow-2xl relative"
+            style={{ 
+              border: '4px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
+             }}
+          >
             {app.icon ? (
               <img src={app.icon} alt={app.name} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-4xl font-display font-bold gradient-text">{app.name?.charAt(0)}</span>
+              <div className="w-full h-full gradient-bg flex items-center justify-center">
+                <span className="text-5xl font-display font-bold">{app.name?.charAt(0)}</span>
+              </div>
             )}
+          </motion.div>
+
+          <h1 className="font-display text-4xl md:text-6xl font-black mb-4 tracking-tight">{app.name}</h1>
+          <p className="font-body text-lg md:text-xl opacity-60 mb-8 max-w-2xl mx-auto">{app.shortDesc}</p>
+
+          {/* Platform & Version Badges */}
+          <div className="flex flex-wrap justify-center gap-2 mb-10">
+            <span className="glass-pill text-xs font-bold px-4 py-1.5 uppercase tracking-wider bg-white/10">v{app.version || '1.0.0'}</span>
+            {app.category && <span className="glass-pill text-xs font-bold px-4 py-1.5 uppercase tracking-wider bg-violet-500/20 text-violet-300">{app.category}</span>}
+            {app.platform?.map(p => (
+              <span key={p} className="glass-pill text-xs font-bold px-4 py-1.5 uppercase tracking-wider bg-white/5">{p}</span>
+            ))}
           </div>
 
-          <div className="flex-1">
-            <h1 className="font-display text-3xl md:text-4xl font-bold mb-2">{app.name}</h1>
-            <p className="font-body opacity-60 mb-3">{app.shortDesc}</p>
-            <div className="flex flex-wrap gap-2 mb-4">
-              <span className="glass-pill text-xs">v{app.version || '1.0.0'}</span>
-              {app.category && <span className="glass-pill text-xs"><Tag size={12} /> {app.category}</span>}
-              {app.platform?.map(p => (
-                <span key={p} className="glass-pill text-xs">{p}</span>
-              ))}
-            </div>
-
-            {/* Download Button */}
-            <div className="flex items-center gap-4">
-              <GlassButton
-                onClick={handleDownload}
-                disabled={downloading}
-                className="flex items-center gap-3 text-base px-8 py-3"
-              >
-                {downloadStatus === 'preparing' && (
+          {/* Primary Action Button */}
+          <div className="flex flex-col items-center gap-4">
+            <motion.button
+              whileHover={{ scale: 1.05, filter: 'brightness(1.1)' }}
+              whileTap={{ scale: 0.98 }}
+              onClick={handleDownload}
+              disabled={downloading}
+              className="relative group p-[2px] rounded-full overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-cyan-500 to-violet-600 animate-gradient-x" />
+              <div className="relative px-12 py-4 bg-black/40 backdrop-blur-xl rounded-full flex items-center gap-4 transition-all duration-300 group-hover:bg-transparent">
+                {downloadStatus === 'idle' ? (
                   <>
-                    <div className="loader-ring" style={{ width: 18, height: 18, borderWidth: 2 }} />
-                    Preparing...
-                  </>
-                )}
-                {downloadStatus === 'decompressing' && (
-                  <>
-                    <span className="animate-spin">🔄</span>
-                    Decompressing...
-                  </>
-                )}
-                {downloadStatus === 'done' && (
-                  <>
-                    <span>✅</span>
-                    Downloaded!
-                  </>
-                )}
-                {downloadStatus === 'idle' && (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Download size={20} />
-                      <span>Download v{app.version || '1.0.0'}</span>
-                    </div>
+                    <Download size={24} className="text-white" />
+                    <span className="text-lg font-bold text-white pr-4">Download Now</span>
                     {app.fileSize && (
-                      <div className="flex items-center gap-3 pl-3 border-l border-white/20">
-                        <span className="opacity-80 text-sm">{app.fileSize}</span>
-                      </div>
+                      <span className="pl-4 border-l border-white/20 text-sm font-medium opacity-60">{app.fileSize}</span>
                     )}
                   </>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="loader-ring w-5 h-5 border-2" />
+                    <span className="text-lg font-bold text-white capitalize">{downloadStatus}...</span>
+                  </div>
                 )}
-              </GlassButton>
-            </div>
+              </div>
+            </motion.button>
+            <p className="text-[10px] uppercase tracking-[0.2em] opacity-30 font-bold">Secure Verified Download</p>
           </div>
         </div>
 
         {/* Action Bar */}
-        <div className="flex items-center gap-2 mt-6 pt-6 border-t border-white/10">
+        <div className="flex items-center justify-center gap-3 mb-12">
           {/* Like */}
           <motion.button
+            whileHover={{ y: -2 }}
             whileTap={{ scale: 0.9 }}
             onClick={handleLike}
-            className={`glass-pill flex items-center gap-2 transition-colors ${liked ? 'text-red-400' : ''}`}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl glass transition-all ${liked ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'hover:bg-white/10'}`}
           >
-            <motion.div animate={liked ? { scale: [1, 1.3, 1] } : {}} transition={{ type: 'spring' }}>
-              <Heart size={18} fill={liked ? 'currentColor' : 'none'} />
-            </motion.div>
-            {app.showLikes !== false && <span className="text-sm">{likeCount}</span>}
+            <Heart size={20} fill={liked ? 'currentColor' : 'none'} />
+            <span className="font-bold text-sm">{app.showLikes !== false ? likeCount : 'Like'}</span>
           </motion.button>
 
           {/* Share */}
           <motion.button
+             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.9 }}
             onClick={handleShare}
-            className="glass-pill flex items-center gap-2"
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl glass hover:bg-white/10 transition-all"
           >
-            <Share2 size={18} />
-            <span className="text-sm">Share</span>
+            <Share2 size={20} />
+            <span className="font-bold text-sm">Share</span>
           </motion.button>
 
           {/* Comments */}
           <motion.button
+             whileHover={{ y: -2 }}
             whileTap={{ scale: 0.9 }}
             onClick={() => setCommentsOpen(true)}
-            className="glass-pill flex items-center gap-2"
+            className="flex items-center gap-2 px-6 py-3 rounded-2xl glass hover:bg-white/10 transition-all"
           >
-            <MessageCircle size={18} />
-            <span className="text-sm">{app.showComments !== false ? comments.filter(c => !c.hidden).length : ''} Comments</span>
+            <MessageCircle size={20} />
+            <span className="font-bold text-sm">{app.showComments !== false ? commentCount : 'Comments'}</span>
           </motion.button>
         </div>
-      </div>
 
       {/* Preview Images */}
-      {app.previewImages && app.previewImages.length > 0 && (
-        <div className="mb-8">
-          <h2 className="font-display text-2xl font-bold mb-4">Preview</h2>
-          <div className="flex gap-4 overflow-x-auto pb-4 hide-scrollbar">
-            {app.previewImages.map((img, i) => (
+      {app.previewUrls && app.previewUrls.length > 0 && (
+        <div className="mb-12">
+          <h2 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
+            <HardDrive size={20} className="text-cyan-400" /> App Screenshots
+          </h2>
+          
+          <div
+            style={{
+              display: 'flex',
+              gap: '16px',
+              overflowX: 'auto',
+              scrollSnapType: 'x mandatory',
+              WebkitOverflowScrolling: 'touch',
+              scrollBehavior: 'smooth',
+              padding: '8px 4px 16px',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'none',
+            }}
+            className="hide-scrollbar"
+          >
+            {app.previewUrls.map((url, i) => (
               <motion.div
                 key={i}
-                whileHover={{ scale: 1.02 }}
-                className="flex-shrink-0 glass p-2 rounded-2xl cursor-pointer"
+                style={{
+                  flexShrink: 0,
+                  scrollSnapAlign: 'start',
+                  borderRadius: '24px',
+                  overflow: 'hidden',
+                  width: 'clamp(240px, 70vw, 320px)',
+                  aspectRatio: '9/16',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.02)'
+                }}
+                whileHover={{ y: -5, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                initial={{ opacity: 0, x: 40 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.1 }}
                 onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
               >
-                <img src={img} alt={`Preview ${i + 1}`} className="h-48 md:h-64 rounded-xl object-cover" />
+                <img
+                  src={url}
+                  alt={`Preview ${i + 1}`}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                  loading="lazy"
+                />
               </motion.div>
             ))}
           </div>
-          <div className="flex justify-center gap-1.5 mt-2">
-            {app.previewImages.map((_, i) => (
-              <div key={i} className={`w-2 h-2 rounded-full ${i === 0 ? 'gradient-bg' : 'bg-white/20'}`} />
+
+          {/* Dot indicators */}
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center',
+            gap: '8px',
+            marginTop: '12px',
+          }}>
+            {app.previewUrls.map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  width: i === lightboxIndex ? '20px' : '6px',
+                  height: '6px',
+                  borderRadius: '99px',
+                  background: i === lightboxIndex
+                    ? '#7c3aed'
+                    : 'rgba(255,255,255,0.2)',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+              />
             ))}
           </div>
         </div>
@@ -355,7 +436,7 @@ export default function AppDetailPage() {
 
       {/* Lightbox */}
       <PreviewLightbox
-        images={app.previewImages || []}
+        images={app.previewUrls || []}
         initialIndex={lightboxIndex}
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
@@ -377,7 +458,8 @@ export default function AppDetailPage() {
         onHide={handleHideComment}
         onDelete={handleDeleteComment}
       />
-    </motion.div>
+      </motion.div>
+    </div>
   );
 }
 

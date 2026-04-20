@@ -52,7 +52,21 @@ export async function updateApp(id, data) {
 }
 
 export async function deleteApp(id) {
-  // Cloudinary deletion handled separately or skipped for now
+  if (!id) throw new Error('No app ID provided');
+  try {
+    // Try to delete Cloudinary assets if paths exist
+    const snap = await getDoc(doc(db, 'apps', id));
+    if (snap.exists()) {
+      // Note: Cloudinary deletion needs API secret
+      // which can't be exposed in frontend.
+      // Just delete Firestore doc — Cloudinary files
+      // will remain but that's acceptable for free tier.
+      console.log('Deleting app:', snap.data().name);
+    }
+  } catch (e) {
+    console.warn('Pre-delete check failed:', e);
+  }
+  // Delete the Firestore document
   await deleteDoc(doc(db, 'apps', id));
 }
 
@@ -71,14 +85,34 @@ export async function toggleLike(id, isLiking) {
 // ── COMMENTS ─────────────────────────────────────────────
 
 export async function getComments(appId) {
-  const snap = await getDocs(
-    query(
+  try {
+    // Try with orderBy first (needs index)
+    const q = query(
       collection(db, 'comments'),
       where('appId', '==', appId),
       orderBy('createdAt', 'desc')
-    )
-  );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    if (err.code === 'failed-precondition') {
+      // Index not created yet — fallback without orderBy
+      console.warn('Index missing, using fallback query');
+      const q2 = query(
+        collection(db, 'comments'),
+        where('appId', '==', appId)
+      );
+      const snap2 = await getDocs(q2);
+      return snap2.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => {
+          const ta = a.createdAt?.seconds || 0;
+          const tb = b.createdAt?.seconds || 0;
+          return tb - ta;
+        });
+    }
+    throw err;
+  }
 }
 
 export async function postComment(appId, authorName, text) {
