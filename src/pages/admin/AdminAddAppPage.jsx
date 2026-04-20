@@ -36,7 +36,7 @@ export default function AdminAddAppPage() {
     <AddEditAppModal
       isOpen={true}
       onClose={() => navigate('/admin/home')}
-      editApp={app}
+      editingApp={app}
     />
   );
 }

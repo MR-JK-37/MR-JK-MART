@@ -1064,7 +1064,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
             </div>
           </div>
         ) : (
-          <>{editApp ? 'Update App' : 'Publish App'} 🚀</>
+          <>{editingApp ? 'Update App' : 'Publish App'} 🚀</>
         )}
       </GlassButton>
     </GlassModal>
