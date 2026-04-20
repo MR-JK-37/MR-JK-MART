@@ -40,7 +40,7 @@ export default function Navbar() {
         initial={{ y: -100 }}
         animate={{ y: (isSplash && !scrolled) ? -100 : 0 }}
         transition={{ type: 'spring', stiffness: 200, damping: 30 }}
-        className="fixed top-4 left-4 right-4 z-[100] liquid-glass shadow-2xl"
+        className="navbar-shell fixed top-4 left-4 right-4 z-[100] liquid-glass shadow-2xl"
         style={{
           borderRadius: 20,
           padding: '10px 24px',

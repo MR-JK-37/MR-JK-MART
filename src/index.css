@@ -355,3 +355,28 @@ body.dark-bg {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+@media (max-width: 768px) {
+  .navbar-shell {
+    left: 10px !important;
+    right: 10px !important;
+    top: 10px !important;
+    padding: 10px 14px !important;
+    border-radius: 18px !important;
+  }
+
+  .splash-hero-card {
+    max-width: calc(100vw - 24px) !important;
+    padding: 22px 18px !important;
+    border-radius: 28px !important;
+  }
+
+  .detail-hero-card {
+    border-radius: 26px !important;
+    padding: 18px !important;
+  }
+
+  .preview-edge-fade {
+    display: none;
+  }
+}

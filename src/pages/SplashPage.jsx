@@ -112,7 +112,7 @@ export default function SplashPage({ children }) {
             initial={{ opacity: 0, y: 24, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ delay: 0.12, duration: 0.75 }}
-            className="liquid-glass"
+            className="liquid-glass splash-hero-card"
             style={{
               maxWidth: 'min(92vw, 920px)',
               margin: '0 auto',
@@ -196,7 +196,7 @@ export default function SplashPage({ children }) {
             className="flex items-center justify-center gap-3 mb-10"
             style={{ flexWrap: 'wrap' }}
           >
-            {['Premium App Store', 'Pure Liquid Glass', 'Fast Downloads'].map((item) => (
+            {['Premium App Store', 'Fast Downloads'].map((item) => (
               <span
                 key={item}
                 style={{

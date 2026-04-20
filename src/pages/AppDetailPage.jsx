@@ -254,7 +254,7 @@ export default function AppDetailPage() {
   }
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-screen overflow-x-clip">
       {/* Premium Back Header */}
       <div className="absolute top-0 left-0 right-0 h-[400px] overflow-hidden z-0">
         <div className="absolute inset-0 bg-black/60 z-10" />
@@ -278,7 +278,7 @@ export default function AppDetailPage() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: 'spring', stiffness: 180, damping: 22 }}
-          className="liquid-glass relative overflow-hidden mb-12"
+          className="liquid-glass detail-hero-card relative overflow-hidden mb-12"
           style={{
             borderRadius: '32px',
             padding: 'clamp(20px, 4vw, 32px)',
@@ -434,83 +434,108 @@ export default function AppDetailPage() {
 
       {/* Preview Images */}
       {previewUrls.length > 0 && (
-        <div className="mb-12">
-          <h2 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
-            <HardDrive size={20} className="text-cyan-400" /> App Screenshots
+        <div className="mb-12 max-w-[980px] mx-auto">
+          <h2 className="font-display text-[clamp(2rem,4vw,2.7rem)] font-bold mb-6">
+            Preview
           </h2>
-          
-          <div
-            ref={previewStripRef}
-            onScroll={handlePreviewScroll}
-            style={{
-              display: 'flex',
-              gap: '16px',
-              overflowX: 'auto',
-              scrollSnapType: 'x mandatory',
-              WebkitOverflowScrolling: 'touch',
-              scrollBehavior: 'smooth',
-              padding: '8px 4px 16px',
-              msOverflowStyle: 'none',
-              scrollbarWidth: 'none',
-            }}
-            className="hide-scrollbar"
-          >
-            {previewUrls.map((url, i) => (
-              <motion.div
-                key={i}
-                style={{
-                  flexShrink: 0,
-                  scrollSnapAlign: 'start',
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  width: 'clamp(240px, 70vw, 320px)',
-                  aspectRatio: '9/16',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  cursor: 'pointer',
-                  background: 'rgba(255,255,255,0.02)'
-                }}
-                whileHover={{ y: -5, scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
-                initial={{ opacity: 0, x: 40 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.1 }}
-                onClick={() => {
-                  setActivePreview(i);
-                  setLightboxIndex(i);
-                  setLightboxOpen(true);
-                }}
-              >
-                <img
-                  src={url}
-                  alt={`Preview ${i + 1}`}
+
+          <div className="relative">
+            <div
+              className="preview-edge-fade pointer-events-none absolute inset-y-0 left-0 w-10 z-[1]"
+              style={{ background: 'linear-gradient(90deg, rgba(10,14,26,0.95), transparent)' }}
+            />
+            <div
+              className="preview-edge-fade pointer-events-none absolute inset-y-0 right-0 w-10 z-[1]"
+              style={{ background: 'linear-gradient(270deg, rgba(10,14,26,0.95), transparent)' }}
+            />
+
+            <div
+              ref={previewStripRef}
+              onScroll={handlePreviewScroll}
+              style={{
+                display: 'flex',
+                gap: '16px',
+                overflowX: 'auto',
+                scrollSnapType: 'x mandatory',
+                WebkitOverflowScrolling: 'touch',
+                scrollBehavior: 'smooth',
+                padding: '8px 2px 18px',
+                msOverflowStyle: 'none',
+                scrollbarWidth: 'none',
+              }}
+              className="hide-scrollbar"
+            >
+              {previewUrls.map((url, i) => (
+                <motion.div
+                  key={i}
                   style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
+                    flexShrink: 0,
+                    scrollSnapAlign: 'center',
+                    width: 'clamp(142px, 18vw, 178px)',
+                    borderRadius: '24px',
+                    padding: '6px',
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.04))',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    boxShadow: '0 18px 36px rgba(3, 8, 24, 0.24)',
+                    cursor: 'pointer',
                   }}
-                  loading="lazy"
-                />
-              </motion.div>
-            ))}
+                  whileHover={{ y: -4, scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  initial={{ opacity: 0, x: 24 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.07 }}
+                  onClick={() => {
+                    setActivePreview(i);
+                    setLightboxIndex(i);
+                    setLightboxOpen(true);
+                  }}
+                >
+                  <div
+                    style={{
+                      borderRadius: '20px',
+                      overflow: 'hidden',
+                      aspectRatio: '9 / 19',
+                      background: '#0b1020',
+                      border: '1px solid rgba(96,165,250,0.2)',
+                    }}
+                  >
+                    <img
+                      src={url}
+                      alt={`Preview ${i + 1}`}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                      loading="lazy"
+                    />
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
 
-          {/* Dot indicators */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center',
-            gap: '6px',
-            marginTop: '8px',
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: '8px',
+              marginTop: '10px',
+            }}
+          >
             {previewUrls.map((_, i) => (
-              <div
+              <button
                 key={i}
+                type="button"
+                aria-label={`Go to preview ${i + 1}`}
                 style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
+                  width: i === activePreview ? '18px' : '8px',
+                  height: '8px',
+                  borderRadius: '999px',
+                  border: 'none',
                   background: i === activePreview
-                    ? '#7c3aed'
-                    : 'rgba(255,255,255,0.2)',
+                    ? 'linear-gradient(135deg, #7c3aed, #38bdf8)'
+                    : 'rgba(255,255,255,0.22)',
                   transition: 'all 0.3s ease',
                   cursor: 'pointer',
                 }}
