@@ -7,6 +7,7 @@ import useToastStore from '../../store/useToastStore';
 import { uploadImage, uploadMultipleImages, formatFileSize } from '../../services/cloudinary';
 import { uploadAppFile } from '../../firebase/storageService';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
+import { getAppVersion } from '../../utils/versionCheck';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const PLATFORMS = [
@@ -616,6 +617,14 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
             {/* FILE UPLOAD TAB */}
             {uploadMode === 'file' && (
               <div>
+                <p style={{
+                  margin: '0 0 12px',
+                  color: 'rgba(52,211,153,0.82)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}>
+                  Upload backend: Firebase Storage · version {getAppVersion()}
+                </p>
                 
                 {/* Drop zone */}
                 {uploadStatus === 'idle' && !form.appFile && (
