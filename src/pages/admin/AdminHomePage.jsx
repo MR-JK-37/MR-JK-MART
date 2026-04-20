@@ -20,7 +20,7 @@ export default function AdminHomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
-  const showToast = useToastStore(s => s.show) || ((type, msg) => alert(msg));
+  const toast = useToastStore();
 
   const loadData = async () => {
     try {
@@ -68,10 +68,10 @@ export default function AdminHomePage() {
     
     try {
       await deleteApp(appId);
-      showToast('success', `"${appName}" deleted`);
+      toast.success(`"${appName}" deleted`);
       await loadData(); // refresh list
     } catch (err) {
-      showToast('error', 'Delete failed: ' + err.message);
+      toast.error('Delete failed: ' + err.message);
       console.error('Delete error:', err);
     }
   };

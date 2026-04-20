@@ -50,6 +50,40 @@ export default function SearchPage() {
     navigate(`/app/${id}`);
   };
 
+  const renderAppRow = (app, i) => {
+    const iconUrl = app.iconUrl || app.icon || '';
+
+    return (
+      <motion.div
+        key={app.id}
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: i * 0.05 }}
+      >
+        <GlassCard
+          onClick={() => handleAppClick(app.id)}
+          className="p-4 flex items-center gap-4"
+        >
+          <div
+            className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center"
+            style={{ background: iconUrl ? 'transparent' : 'linear-gradient(135deg, #7c3aed, #06b6d4)' }}
+          >
+            {iconUrl ? (
+              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white font-bold">{app.name?.charAt(0)}</span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-display font-bold text-base">{app.name}</h3>
+            <p className="text-sm opacity-50 truncate">{app.shortDesc}</p>
+          </div>
+          <ArrowRight size={18} className="opacity-30 flex-shrink-0" />
+        </GlassCard>
+      </motion.div>
+    );
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -95,33 +129,7 @@ export default function SearchPage() {
       {results !== null ? (
         results.length > 0 ? (
           <div className="space-y-3">
-            {results.map((app, i) => (
-              <motion.div
-                key={app.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-              >
-                <GlassCard
-                  onClick={() => handleAppClick(app.id)}
-                  className="p-4 flex items-center gap-4"
-                >
-                  <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center"
-                    style={{ background: app.icon ? 'transparent' : 'linear-gradient(135deg, #7c3aed, #06b6d4)' }}>
-                    {app.icon ? (
-                      <img src={app.icon} alt={app.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-white font-bold">{app.name?.charAt(0)}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-display font-bold text-base">{app.name}</h3>
-                    <p className="text-sm opacity-50 truncate">{app.shortDesc}</p>
-                  </div>
-                  <ArrowRight size={18} className="opacity-30 flex-shrink-0" />
-                </GlassCard>
-              </motion.div>
-            ))}
+            {results.map(renderAppRow)}
           </div>
         ) : (
           <div className="text-center py-20">
@@ -154,33 +162,7 @@ export default function SearchPage() {
           {apps.filter(a => a.published !== false).length > 0 && (
             <div className="space-y-3">
               <p className="text-sm opacity-40 mb-3">All apps</p>
-              {apps.filter(a => a.published !== false).map((app, i) => (
-                <motion.div
-                  key={app.id}
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.03 }}
-                >
-                  <GlassCard
-                    onClick={() => handleAppClick(app.id)}
-                    className="p-4 flex items-center gap-4"
-                  >
-                    <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 flex items-center justify-center"
-                      style={{ background: app.icon ? 'transparent' : 'linear-gradient(135deg, #7c3aed, #06b6d4)' }}>
-                      {app.icon ? (
-                        <img src={app.icon} alt={app.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-white font-bold">{app.name?.charAt(0)}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-display font-bold">{app.name}</h3>
-                      <p className="text-sm opacity-50 truncate">{app.shortDesc}</p>
-                    </div>
-                    <ArrowRight size={18} className="opacity-30 flex-shrink-0" />
-                  </GlassCard>
-                </motion.div>
-              ))}
+              {apps.filter(a => a.published !== false).map(renderAppRow)}
             </div>
           )}
         </div>

@@ -19,7 +19,7 @@ export default function AdminAddAppPage() {
 
   const loadApp = async () => {
     setLoading(true);
-    const data = await getAppById(Number(appId));
+    const data = await getAppById(appId);
     setApp(data);
     setLoading(false);
   };

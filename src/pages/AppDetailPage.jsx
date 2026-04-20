@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, Heart, Share2, MessageCircle, Calendar, HardDrive, Monitor, Tag, X, Send } from 'lucide-react';
@@ -16,6 +16,7 @@ export default function AppDetailPage() {
   const { appId } = useParams();
   const isAdmin = useAppStore(s => s.isAdmin);
   const toast = useToastStore();
+  const previewStripRef = useRef(null);
 
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -25,13 +26,18 @@ export default function AppDetailPage() {
   const [likeCount, setLikeCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [activePreview, setActivePreview] = useState(0);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comments, setComments] = useState([]);
-  const [commentName, setCommentName] = useState('');
+  const [userName, setUserName] = useState(() => localStorage.getItem('mrjk_commenter_name') || '');
   const [commentText, setCommentText] = useState('');
-  const [nameSet, setNameSet] = useState(false);
-
+  const [step, setStep] = useState(() => localStorage.getItem('mrjk_commenter_name') ? 'comment' : 'name');
   const [commentCount, setCommentCount] = useState(0);
+  const iconUrl = app?.iconUrl || app?.icon || '';
+  const previewUrls = useMemo(
+    () => (app?.previewUrls || app?.previewImages || []).filter(Boolean),
+    [app]
+  );
 
   useEffect(() => {
     loadApp();
@@ -39,10 +45,29 @@ export default function AppDetailPage() {
     loadComments();
     const savedName = localStorage.getItem('mrjk_commenter_name');
     if (savedName) {
-      setCommentName(savedName);
-      setNameSet(true);
+      setUserName(savedName);
+      setStep('comment');
+    } else {
+      setUserName('');
+      setStep('name');
     }
   }, [appId]);
+
+  useEffect(() => {
+    setActivePreview(0);
+    setLightboxIndex(0);
+  }, [previewUrls.length]);
+
+  const getDateValue = (value) => {
+    if (!value) return null;
+    if (typeof value?.toDate === 'function') return value.toDate();
+    if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000);
+    if (value instanceof Date) return value;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const formatDate = (value) => getDateValue(value)?.toLocaleDateString('en-IN') || 'N/A';
 
   const loadApp = async () => {
     setLoading(true);
@@ -161,15 +186,16 @@ export default function AppDetailPage() {
   };
 
   const handleSetName = () => {
-    if (!commentName.trim()) return;
-    const name = commentName.trim();
+    if (!userName.trim()) return;
+    const name = userName.trim();
     localStorage.setItem('mrjk_commenter_name', name);
-    setNameSet(true);
+    setUserName(name);
+    setStep('comment');
   };
 
   const handlePostComment = async () => {
     if (!commentText.trim()) return;
-    const name = commentName.trim() || 'Anonymous';
+    const name = userName.trim() || 'Anonymous';
     
     try {
       const sanitized = DOMPurify.sanitize(commentText.trim());
@@ -194,6 +220,22 @@ export default function AppDetailPage() {
     toast.info('Comment deleted');
   };
 
+  const handlePreviewScroll = (event) => {
+    if (!previewUrls.length) return;
+    const container = event.currentTarget;
+    const itemWidth = container.firstElementChild?.getBoundingClientRect().width || 1;
+    const gap = 16;
+    const nextIndex = Math.round(container.scrollLeft / (itemWidth + gap));
+    setActivePreview(Math.max(0, Math.min(previewUrls.length - 1, nextIndex)));
+  };
+
+  const scrollToPreview = (index) => {
+    const target = previewStripRef.current?.children?.[index];
+    if (!target) return;
+    target.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+    setActivePreview(index);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -216,11 +258,13 @@ export default function AppDetailPage() {
       {/* Premium Back Header */}
       <div className="absolute top-0 left-0 right-0 h-[400px] overflow-hidden z-0">
         <div className="absolute inset-0 bg-black/60 z-10" />
-        <img 
-          src={app.icon} 
-          className="w-full h-full object-cover blur-3xl scale-150 opacity-40" 
-          alt="" 
-        />
+        {iconUrl && (
+          <img 
+            src={iconUrl} 
+            className="w-full h-full object-cover blur-3xl scale-150 opacity-40" 
+            alt="" 
+          />
+        )}
         <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-black to-transparent z-20" />
       </div>
 
@@ -242,8 +286,8 @@ export default function AppDetailPage() {
               boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
              }}
           >
-            {app.icon ? (
-              <img src={app.icon} alt={app.name} className="w-full h-full object-cover" />
+            {iconUrl ? (
+              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full gradient-bg flex items-center justify-center">
                 <span className="text-5xl font-display font-bold">{app.name?.charAt(0)}</span>
@@ -331,13 +375,15 @@ export default function AppDetailPage() {
         </div>
 
       {/* Preview Images */}
-      {app.previewUrls && app.previewUrls.length > 0 && (
+      {previewUrls.length > 0 && (
         <div className="mb-12">
           <h2 className="font-display text-2xl font-bold mb-6 flex items-center gap-2">
             <HardDrive size={20} className="text-cyan-400" /> App Screenshots
           </h2>
           
           <div
+            ref={previewStripRef}
+            onScroll={handlePreviewScroll}
             style={{
               display: 'flex',
               gap: '16px',
@@ -351,13 +397,13 @@ export default function AppDetailPage() {
             }}
             className="hide-scrollbar"
           >
-            {app.previewUrls.map((url, i) => (
+            {previewUrls.map((url, i) => (
               <motion.div
                 key={i}
                 style={{
                   flexShrink: 0,
                   scrollSnapAlign: 'start',
-                  borderRadius: '24px',
+                  borderRadius: '16px',
                   overflow: 'hidden',
                   width: 'clamp(240px, 70vw, 320px)',
                   aspectRatio: '9/16',
@@ -370,7 +416,11 @@ export default function AppDetailPage() {
                 initial={{ opacity: 0, x: 40 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.1 }}
-                onClick={() => { setLightboxIndex(i); setLightboxOpen(true); }}
+                onClick={() => {
+                  setActivePreview(i);
+                  setLightboxIndex(i);
+                  setLightboxOpen(true);
+                }}
               >
                 <img
                   src={url}
@@ -390,21 +440,23 @@ export default function AppDetailPage() {
           <div style={{ 
             display: 'flex', 
             justifyContent: 'center',
-            gap: '8px',
-            marginTop: '12px',
+            gap: '6px',
+            marginTop: '8px',
           }}>
-            {app.previewUrls.map((_, i) => (
+            {previewUrls.map((_, i) => (
               <div
                 key={i}
                 style={{
-                  width: i === lightboxIndex ? '20px' : '6px',
+                  width: '6px',
                   height: '6px',
-                  borderRadius: '99px',
-                  background: i === lightboxIndex
+                  borderRadius: '50%',
+                  background: i === activePreview
                     ? '#7c3aed'
                     : 'rgba(255,255,255,0.2)',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
                 }}
+                onClick={() => scrollToPreview(i)}
               />
             ))}
           </div>
@@ -426,7 +478,7 @@ export default function AppDetailPage() {
         <InfoCard icon={<Tag size={18} />} label="Version" value={app.version || '1.0.0'} />
         <InfoCard icon={<HardDrive size={18} />} label="Size" value={app.fileSize || 'N/A'} />
         <InfoCard icon={<Monitor size={18} />} label="Platform" value={app.platform?.join(', ') || 'All'} />
-        <InfoCard icon={<Calendar size={18} />} label="Updated" value={app.updatedAt ? new Date(app.updatedAt).toLocaleDateString() : 'N/A'} />
+        <InfoCard icon={<Calendar size={18} />} label="Updated" value={formatDate(app.updatedAt)} />
       </div>
 
       {/* User Manual */}
@@ -436,7 +488,7 @@ export default function AppDetailPage() {
 
       {/* Lightbox */}
       <PreviewLightbox
-        images={app.previewUrls || []}
+        images={previewUrls}
         initialIndex={lightboxIndex}
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
@@ -447,9 +499,10 @@ export default function AppDetailPage() {
         isOpen={commentsOpen}
         onClose={() => setCommentsOpen(false)}
         comments={comments}
-        nameSet={nameSet}
-        commentName={commentName}
-        setCommentName={setCommentName}
+        commentCount={commentCount}
+        step={step}
+        userName={userName}
+        setUserName={setUserName}
         commentText={commentText}
         setCommentText={setCommentText}
         onSetName={handleSetName}
@@ -473,7 +526,7 @@ function InfoCard({ icon, label, value }) {
   );
 }
 
-function CommentsModal({ isOpen, onClose, comments, nameSet, commentName, setCommentName, commentText, setCommentText, onSetName, onPost, isAdmin, onHide, onDelete }) {
+function CommentsModal({ isOpen, onClose, comments, commentCount, step, userName, setUserName, commentText, setCommentText, onSetName, onPost, isAdmin, onHide, onDelete }) {
   return (
     <AnimatePresence>
       {isOpen && (
@@ -484,12 +537,12 @@ function CommentsModal({ isOpen, onClose, comments, nameSet, commentName, setCom
           className="fixed inset-0 z-[200] flex items-end md:items-center justify-center"
           onClick={onClose}
         >
-          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)' }} />
+          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.58)', backdropFilter: 'blur(24px)' }} />
 
           <motion.div
-            initial={{ y: '100%', opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
+            initial={{ y: '100%', opacity: 0, scale: 0.92 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: '100%', opacity: 0, scale: 0.92 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="relative liquid-glass w-full md:max-w-lg md:rounded-2xl rounded-t-3xl overflow-hidden"
             style={{ maxHeight: '80vh' }}
@@ -500,7 +553,7 @@ function CommentsModal({ isOpen, onClose, comments, nameSet, commentName, setCom
               <div className="flex items-center gap-2">
                 <MessageCircle size={20} />
                 <h3 className="font-display text-lg font-bold">Comments</h3>
-                <span className="glass-pill text-xs">{comments.filter(c => !c.hidden).length}</span>
+                <span className="glass-pill text-xs">{commentCount}</span>
               </div>
               <button onClick={onClose} className="p-2 rounded-full hover:bg-white/10">
                 <X size={18} />
@@ -509,11 +562,11 @@ function CommentsModal({ isOpen, onClose, comments, nameSet, commentName, setCom
 
             {/* Input */}
             <div className="p-4 border-b border-white/10">
-              {!nameSet ? (
+              {step === 'name' ? (
                 <div className="flex gap-2">
                   <input
-                    value={commentName}
-                    onChange={e => setCommentName(e.target.value)}
+                    value={userName}
+                    onChange={e => setUserName(e.target.value)}
                     className="glass-input flex-1"
                     placeholder="What's your name?"
                     onKeyDown={e => e.key === 'Enter' && onSetName()}
@@ -521,18 +574,33 @@ function CommentsModal({ isOpen, onClose, comments, nameSet, commentName, setCom
                   <GlassButton onClick={onSetName} className="px-4 text-sm">Continue</GlassButton>
                 </div>
               ) : (
-                <div className="flex gap-2">
-                  <textarea
-                    value={commentText}
-                    onChange={e => setCommentText(e.target.value)}
-                    className="glass-input flex-1 resize-none"
-                    rows={2}
-                    placeholder="Write a comment..."
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onPost(); } }}
-                  />
-                  <GlassButton onClick={onPost} className="px-3 self-end">
-                    <Send size={16} />
-                  </GlassButton>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs opacity-60">
+                    <span>Commenting as {userName || 'Anonymous'}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserName('');
+                        setStep('name');
+                      }}
+                      className="hover:opacity-100 opacity-70"
+                    >
+                      Change
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <textarea
+                      value={commentText}
+                      onChange={e => setCommentText(e.target.value)}
+                      className="glass-input flex-1 resize-none"
+                      rows={2}
+                      placeholder="Write a comment..."
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onPost(); } }}
+                    />
+                    <GlassButton onClick={onPost} className="px-3 self-end">
+                      <Send size={16} />
+                    </GlassButton>
+                  </div>
                 </div>
               )}
             </div>
@@ -568,6 +636,12 @@ function CommentItem({ comment, isAdmin, onHide, onDelete }) {
   if (comment.hidden && !isAdmin) return null;
 
   const initial = comment.authorName?.charAt(0)?.toUpperCase() || '?';
+  const createdAt =
+    typeof comment.createdAt?.toDate === 'function'
+      ? comment.createdAt.toDate()
+      : typeof comment.createdAt?.seconds === 'number'
+        ? new Date(comment.createdAt.seconds * 1000)
+        : new Date(comment.createdAt);
 
   return (
     <div className={`flex gap-3 ${comment.hidden ? 'opacity-40' : ''}`}>
@@ -578,7 +652,7 @@ function CommentItem({ comment, isAdmin, onHide, onDelete }) {
         <div className="flex items-center gap-2 mb-0.5">
           <span className="font-semibold text-sm">{comment.authorName}</span>
           <span className="text-xs opacity-30">
-            {new Date(comment.createdAt).toLocaleDateString()}
+            {Number.isNaN(createdAt.getTime()) ? '' : createdAt.toLocaleDateString('en-IN')}
           </span>
           {comment.hidden && <span className="text-xs text-yellow-500">(hidden)</span>}
         </div>

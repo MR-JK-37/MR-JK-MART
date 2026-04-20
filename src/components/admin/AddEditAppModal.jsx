@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, X, Plus, Link as LinkIcon, GripVertical, Image, Video, Trash2, Save, CheckCircle2 } from 'lucide-react';
+import { Upload, X, Plus, GripVertical, Image, Trash2, Save } from 'lucide-react';
 import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
-import useAppStore from '../../store/useAppStore';
 import useToastStore from '../../store/useToastStore';
 import { uploadImage, uploadMultipleImages, uploadAppFile, formatFileSize } from '../../services/cloudinary';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
-const MAX_RAW_SIZE = 10 * 1024 * 1024; // 10MB Cloudinary Free Limit
 const PLATFORMS = [
   { id: 'windows', label: 'Windows', icon: '🪟' },
   { id: 'mac',     label: 'Mac',     icon: '🍎' },
@@ -20,18 +18,14 @@ const PLATFORMS = [
 ];
 
 export default function AddEditAppModal({ isOpen, onClose, editingApp = null, onRefresh }) {
-  const addApp = useAppStore(s => s.addApp);
-  const updateApp = useAppStore(s => s.updateApp);
   const toast = useToastStore();
-  const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
     name: '', shortDesc: '', longDesc: '', version: '1.0.0',
-    category: 'Utility', platform: [], icon: '',
+    category: 'Utility', platform: [], icon: '', iconPublicId: '',
     previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
     fileName: '', fileSize: '', showLikes: true, showComments: true,
-    published: true, manualSteps: [],
-    iconFile: null, appFile: null
+    published: true, manualSteps: [], appFile: null
   });
 
   const [publishing, setPublishing] = useState(false);
@@ -39,6 +33,8 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const [iconProgress, setIconProgress] = useState(0);
   const [previewProgress, setPreviewProgress] = useState(0);
   const [fileProgress, setFileProgress] = useState(0);
+  const [iconUploading, setIconUploading] = useState(false);
+  const [previewUploading, setPreviewUploading] = useState(false);
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
@@ -47,8 +43,6 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const [uploadMode, setUploadMode] = useState('url'); // 'file' or 'url'
   const [uploadedFileUrl, setUploadedFileUrl] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
-  const [fileError, setFileError] = useState('');
-  const urlInputRef = useRef(null);
   const iconInputRef = useRef(null);
   const previewInputRef = useRef(null);
 
@@ -61,8 +55,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         version: editingApp.version || '1.0.0',
         category: editingApp.category || 'Utility',
         platform: editingApp.platform || [],
-        icon: editingApp.iconUrl || editingApp.icon || '', // support both names
-        previewImages: editingApp.previewUrls || editingApp.previewImages || [],
+        icon: editingApp.iconUrl || editingApp.icon || '',
+        iconPublicId: editingApp.iconPublicId || '',
+        previewImages: (editingApp.previewUrls || editingApp.previewImages || [])
+          .map((image) => (typeof image === 'string' ? { url: image } : image))
+          .filter((image) => image?.url),
         fileData: editingApp.fileData || null,
         fileHandle: editingApp.fileHandle || null,
         downloadUrl: editingApp.downloadUrl || '',
@@ -72,25 +69,30 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         showComments: editingApp.showComments ?? true,
         published: editingApp.published ?? true,
         manualSteps: editingApp.manualSteps || [],
-        iconFile: null, appFile: null
+        appFile: null
       });
       setUploadMode('url');
       setExternalUrl(editingApp.downloadUrl || '');
+      setUploadedFileUrl('');
+      setUploadStatus('idle');
+      setUploadProgress(0);
+      setIconProgress(0);
+      setPreviewProgress(0);
     } else {
       // Reset ALL fields for new app
       setForm({
         name: '', shortDesc: '', longDesc: '', version: '1.0.0',
-        category: 'Utility', platform: [], icon: '',
+        category: 'Utility', platform: [], icon: '', iconPublicId: '',
         previewImages: [], fileData: null, fileHandle: null, downloadUrl: '',
         fileName: '', fileSize: '', showLikes: true, showComments: true,
-        published: true, manualSteps: [],
-        iconFile: null, appFile: null
+        published: true, manualSteps: [], appFile: null
       });
       setExternalUrl('');
       setUploadedFileUrl('');
       setUploadStatus('idle');
       setUploadProgress(0);
-      setFileError('');
+      setIconProgress(0);
+      setPreviewProgress(0);
     }
   }, [editingApp, isOpen]);
 
@@ -98,27 +100,68 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleIconUpload = (e) => {
+  const handleIconUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setForm(prev => ({ ...prev, iconFile: file }));
-    const reader = new FileReader();
-    reader.onload = () => handleChange('icon', reader.result);
-    reader.readAsDataURL(file);
+    e.target.value = '';
+
+    try {
+      setIconUploading(true);
+      setIconProgress(15);
+      const result = await uploadImage(file, 'mrjk-mart/icons');
+      setForm(prev => ({
+        ...prev,
+        icon: result.url,
+        iconPublicId: result.publicId,
+      }));
+      setIconProgress(100);
+      toast.success('Icon uploaded');
+    } catch (err) {
+      setIconProgress(0);
+      toast.error(`Icon upload failed: ${err.message}`);
+    } finally {
+      setIconUploading(false);
+    }
   };
 
-  const handlePreviewUpload = (e) => {
+  const handlePreviewUpload = async (e) => {
     const files = Array.from(e.target.files || []);
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        setForm(prev => ({
-          ...prev,
-          previewImages: [...prev.previewImages, { url: reader.result, file }].slice(0, 10),
-        }));
-      };
-      reader.readAsDataURL(file);
-    });
+    if (!files.length) return;
+    e.target.value = '';
+
+    const availableSlots = Math.max(0, 10 - form.previewImages.length);
+    const nextFiles = files.slice(0, availableSlots);
+
+    if (!nextFiles.length) {
+      toast.info('Maximum 10 preview images allowed');
+      return;
+    }
+
+    try {
+      setPreviewUploading(true);
+      setPreviewProgress(5);
+      const results = await uploadMultipleImages(
+        nextFiles,
+        'mrjk-mart/previews',
+        (index, total) => {
+          setPreviewProgress(Math.round(((index + 1) / total) * 100));
+        }
+      );
+      setForm(prev => ({
+        ...prev,
+        previewImages: [
+          ...prev.previewImages,
+          ...results.map(result => ({ url: result.url, publicId: result.publicId })),
+        ].slice(0, 10),
+      }));
+      setPreviewProgress(100);
+      toast.success('Preview images uploaded');
+    } catch (err) {
+      setPreviewProgress(0);
+      toast.error(`Preview upload failed: ${err.message}`);
+    } finally {
+      setPreviewUploading(false);
+    }
   };
 
   const removePreview = (index) => {
@@ -162,8 +205,12 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   };
 
   const handleFileSelect = (file) => {
-    setFileError('');
     setForm(prev => ({ ...prev, appFile: file }));
+    setUploadStatus('idle');
+    setUploadedFileUrl('');
+    setUploadProgress(0);
+    setUploadedBytes(0);
+    setTotalBytes(0);
     // Auto-fill filename and size
     handleChange('fileName', file.name);
     handleChange('fileSize', formatFileSize(file.size));
@@ -224,9 +271,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       showComments, 
       published: isPublished, 
       manualSteps, 
-      iconFile, 
       appFile,
-      downloadUrl: existingDownloadUrl,
       fileName: formFileName,
       fileSize: formFileSize
     } = form;
@@ -243,21 +288,13 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       return;
     }
     if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
-      if (fileError) {
-        toast.error('This file is too large for direct upload. Please use a URL.');
-      } else {
-        toast.error('Please select a file to upload');
-      }
+      toast.error('Please select a file to upload');
       return;
     }
 
     setPublishing(true);
 
     try {
-      let iconUrl = editingApp?.iconUrl || form.icon || null;
-      let iconPublicId = editingApp?.iconPublicId || null;
-      let previewUrls = editingApp?.previewUrls || [];
-
       // Upload app file first if needed
       setPublishStep('Handling app file...');
       const downloadUrl = await uploadAppFileIfNeeded();
@@ -268,37 +305,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         return;
       }
 
-      // Upload icon to Cloudinary
-      if (iconFile instanceof File) {
-        setPublishStep('Uploading icon...');
-        setIconProgress(0);
-        const result = await uploadImage(iconFile, 'mrjk-mart/icons');
-        iconUrl = result.url;
-        iconPublicId = result.publicId;
-        setIconProgress(100);
-      }
-
-      // Upload preview images to Cloudinary
-      const newPreviews = form.previewImages.filter(p => p.file instanceof File).map(p => p.file);
-      const existingUrls = form.previewImages.filter(p => !(p.file instanceof File)).map(p => p.url || p);
-
-      if (newPreviews.length > 0) {
-        setPublishStep('Uploading preview images...');
-        const results = await uploadMultipleImages(
-          newPreviews,
-          'mrjk-mart/previews',
-          (i, total) => {
-            setPreviewProgress(Math.round((i / total) * 100));
-          }
-        );
-        previewUrls = [
-          ...existingUrls,
-          ...results.map(r => r.url)
-        ];
-        setPreviewProgress(100);
-      }
-
       setPublishStep('Saving to database...');
+      const iconUrl = form.icon || editingApp?.iconUrl || editingApp?.icon || null;
+      const previewUrls = form.previewImages
+        .map((preview) => preview?.url || preview)
+        .filter(Boolean);
 
       const appData = {
         name:         formName.trim(),
@@ -308,9 +319,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         category:     formCategory,
         platform:     selectedPlatforms,
         iconUrl,
-        iconPublicId,
+        icon:         iconUrl,
+        iconPublicId: form.iconPublicId || editingApp?.iconPublicId || null,
         previewUrls,
-        downloadUrl:  externalUrl.trim(),
+        previewImages: previewUrls,
+        downloadUrl,
         fileName:     formFileName?.trim() || null,
         fileSize:     formFileSize || null,
         showLikes:    showLikes,
@@ -329,7 +342,9 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         toast.success('App published! 🚀');
       }
 
-      if (onRefresh) onRefresh();
+      if (onRefresh) {
+        await onRefresh();
+      }
 
       onClose();
     } catch (err) {
@@ -475,7 +490,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   <button 
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleChange('icon', '');
+                      setForm(prev => ({ ...prev, icon: '', iconPublicId: '' }));
                     }} 
                     className="absolute -top-2 -right-2 p-1 rounded-full bg-red-500 text-white"
                   >
@@ -484,8 +499,14 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 </div>
               ) : (
                 <div className="w-20 h-20 rounded-2xl glass flex items-center justify-center hover:bg-white/10 transition-colors">
-                  <Upload size={24} className="opacity-40" />
-                  <span className="sr-only">Upload Icon</span>
+                  {iconUploading ? (
+                    <span className="text-[11px] opacity-70">Uploading...</span>
+                  ) : (
+                    <>
+                      <Upload size={24} className="opacity-40" />
+                      <span className="sr-only">Upload Icon</span>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -496,6 +517,9 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
               style={{ display: 'none' }}
               onChange={handleIconUpload}
             />
+            {iconUploading && (
+              <span className="text-xs opacity-60">{iconProgress}%</span>
+            )}
           </div>
         </div>
 
@@ -516,9 +540,12 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 <button 
                   type="button"
                   onClick={() => previewInputRef.current?.click()}
-                  className="w-20 h-20 rounded-xl glass flex items-center justify-center cursor-pointer hover:bg-white/10 transition-colors"
+                  className="w-20 h-20 rounded-xl glass flex flex-col items-center justify-center cursor-pointer hover:bg-white/10 transition-colors"
                 >
                   <Plus size={20} className="opacity-40" />
+                  <span className="text-[10px] opacity-60 mt-1">
+                    {previewUploading ? `${previewProgress}%` : 'Add Preview'}
+                  </span>
                 </button>
                 <input
                   ref={previewInputRef}
@@ -584,7 +611,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
               <div>
                 
                 {/* Drop zone */}
-                {uploadStatus === 'idle' && !form.appFile && !fileError && (
+                {uploadStatus === 'idle' && !form.appFile && (
                   <label style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -655,59 +682,6 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       }}
                     />
                   </label>
-                )}
-
-                {/* File too large error */}
-                {fileError && (
-                  <div style={{
-                    padding: '24px',
-                    background: 'rgba(239,68,68,0.1)',
-                    border: '1px solid rgba(239,68,68,0.3)',
-                    borderRadius: '16px',
-                    textAlign: 'center',
-                  }}>
-                    <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
-                    <h4 style={{ color: '#f87171', margin: '0 0 8px', fontSize: '15px' }}>File Too Large</h4>
-                    <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', lineHeight: '1.5', margin: '0 0 16px' }}>
-                      Cloudinary Free only supports uploads up to <b>10MB</b> for non-media files. Your file is larger.
-                    </p>
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={() => setFileError('')}
-                        style={{
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          background: 'rgba(255,255,255,0.1)',
-                          border: 'none',
-                          color: 'white',
-                          fontSize: '13px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Try smaller file
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFileError('');
-                          setUploadMode('url');
-                        }}
-                        style={{
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          background: '#7c3aed',
-                          border: 'none',
-                          color: 'white',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Use External URL 🔗
-                      </button>
-                    </div>
-                  </div>
                 )}
 
                 {/* File selected — show info */}
@@ -1088,5 +1062,4 @@ function ToggleRow({ label, value, onChange }) {
     </div>
   );
 }
-
 

@@ -12,6 +12,8 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
   const setPageLoading = useAppStore(s => s.setPageLoading);
   const [showMenu, setShowMenu] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const iconUrl = app.iconUrl || app.icon || '';
+  const platforms = (app.platform || []).slice(0, 3);
 
   const handleClick = () => {
     setPageLoading(true);
@@ -53,8 +55,24 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
       <GlassCard
         liquid
         onClick={handleClick}
-        className="p-6 flex flex-col items-center text-center relative overflow-hidden gradient-border h-full min-h-[320px]"
+        className="p-6 flex flex-col text-left relative overflow-hidden gradient-border h-full min-h-[360px]"
+        style={{
+          background: isHovered
+            ? 'linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06))'
+            : undefined,
+        }}
       >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: isHovered
+              ? 'linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.1) 40%, transparent 75%)'
+              : 'transparent',
+            transform: isHovered ? 'translateX(0%)' : 'translateX(-140%)',
+            transition: 'transform 0.8s ease',
+          }}
+        />
+
         {/* Admin Menu */}
         {isAdmin && (
           <div className="absolute top-3 right-3 z-10">
@@ -95,54 +113,54 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
           </div>
         )}
 
-        {/* App Icon */}
-        <motion.div
-          animate={{ scale: isHovered ? 1.05 : 1 }}
-          transition={{ type: 'spring', stiffness: 300 }}
-          className="w-20 h-20 rounded-2xl overflow-hidden mb-4 flex items-center justify-center"
-          style={{
-            background: app.icon ? 'transparent' : 'linear-gradient(135deg, #7c3aed, #06b6d4)',
-          }}
-        >
-          {app.icon ? (
-            <img src={app.icon} alt={app.name} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-white text-2xl font-display font-bold">
-              {app.name?.charAt(0) || 'A'}
-            </span>
-          )}
-        </motion.div>
+        <div className="relative z-[1] flex h-full flex-col">
+          <motion.div
+            animate={{ scale: isHovered ? 1.05 : 1, rotate: isHovered ? -1.5 : 0 }}
+            transition={{ type: 'spring', stiffness: 300 }}
+            className="w-24 h-24 rounded-[28px] overflow-hidden mb-5 flex items-center justify-center self-center"
+            style={{
+              background: iconUrl ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #7c3aed, #06b6d4)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              boxShadow: '0 18px 30px rgba(4, 10, 24, 0.3)',
+            }}
+          >
+            {iconUrl ? (
+              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white text-3xl font-display font-bold">
+                {app.name?.charAt(0) || 'A'}
+              </span>
+            )}
+          </motion.div>
 
-        {/* App Name & Platform */}
-        <div style={{ marginBottom: '4px' }}>
-          <h3 className="font-display text-lg font-bold line-clamp-1">{app.name}</h3>
-          <div className="flex justify-center gap-1 mt-1">
-            {(app.platform || []).map(p => (
-              <span key={p} className="text-[10px] opacity-40 uppercase tracking-tighter">{p}</span>
+          <div className="mb-3 text-center">
+            <h3 className="font-display text-xl font-bold line-clamp-1">{app.name}</h3>
+            <p className="text-sm opacity-60 font-body mt-2 line-clamp-3 min-h-[60px]">{app.shortDesc}</p>
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-2 mb-4">
+            <span className="glass-pill text-[11px]">v{app.version || '1.0.0'}</span>
+            {platforms.map(platform => (
+              <span key={platform} className="glass-pill text-[11px] capitalize">
+                {platform}
+              </span>
             ))}
           </div>
+
+          <div className="mt-auto flex items-center justify-between rounded-2xl px-4 py-3 bg-black/15 border border-white/10">
+            <div className="flex items-center gap-2 text-sm opacity-75">
+              <Download size={14} className="text-cyan-300" />
+              <span>{app.downloadCount || 0} downloads</span>
+            </div>
+            <motion.span
+              initial={{ opacity: 0.7 }}
+              animate={{ opacity: isHovered ? 1 : 0.75, x: isHovered ? 4 : 0 }}
+              className="text-sm font-medium gradient-text"
+            >
+              View App
+            </motion.span>
+          </div>
         </div>
-
-        {/* Description */}
-        <p className="text-sm opacity-60 font-body mb-3 line-clamp-2">{app.shortDesc}</p>
-
-        {/* Version Badge */}
-        <span className="glass-pill text-xs mb-2">v{app.version || '1.0.0'}</span>
-
-        {/* Download Count */}
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] opacity-60">
-          <Download size={12} className="text-violet-400" />
-          <span>{app.downloadCount || 0}</span>
-        </div>
-
-        {/* Hover Reveal */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: isHovered ? 1 : 0 }}
-          className="absolute bottom-3 left-0 right-0 text-center"
-        >
-          <span className="text-xs font-medium gradient-text">View App →</span>
-        </motion.div>
       </GlassCard>
     </motion.div>
   );

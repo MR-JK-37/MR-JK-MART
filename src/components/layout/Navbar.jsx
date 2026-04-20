@@ -40,12 +40,24 @@ export default function Navbar() {
         initial={{ y: -100 }}
         animate={{ y: (isSplash && !scrolled) ? -100 : 0 }}
         transition={{ type: 'spring', stiffness: 200, damping: 30 }}
-        className="fixed top-4 left-4 right-4 z-[100] liquid-glass border border-white/10 shadow-2xl"
-        style={{ borderRadius: 20, padding: '10px 24px' }}
+        className="fixed top-4 left-4 right-4 z-[100] liquid-glass shadow-2xl"
+        style={{
+          borderRadius: 20,
+          padding: '10px 24px',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          borderBottom: '1px solid rgba(6,182,212,0.24)',
+          boxShadow: '0 20px 45px rgba(2,6,23,0.28)',
+        }}
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-1 no-underline">
+          <Link
+            to="/"
+            className="flex items-center gap-1 no-underline transition-transform duration-300 hover:scale-[1.02]"
+            style={{ textShadow: '0 0 18px rgba(124,58,237,0.28)' }}
+          >
             <span className="font-display text-xl font-bold gradient-text">MR!JK!</span>
             <span className={`font-display text-xl font-light ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
               MART
