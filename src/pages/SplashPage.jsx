@@ -15,8 +15,6 @@ export default function SplashPage({ children }) {
     window.scrollTo(0, 0);
   }, []);
 
-  const titleLetters = 'MR!JK! - MART'.split('');
-
   return (
     <div style={{ position: 'relative' }}>
       <section
@@ -110,6 +108,21 @@ export default function SplashPage({ children }) {
             margin: '0 auto',
           }}
         >
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ delay: 0.12, duration: 0.75 }}
+            className="liquid-glass"
+            style={{
+              maxWidth: 'min(92vw, 920px)',
+              margin: '0 auto',
+              padding: 'clamp(26px, 5vw, 46px)',
+              borderRadius: '36px',
+              boxShadow: '0 34px 100px rgba(4, 10, 30, 0.3)',
+              background:
+                'linear-gradient(145deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 42%, rgba(9,18,38,0.22) 100%)',
+            }}
+          >
           <motion.p
             style={{
               y: welcomeY,
@@ -128,75 +141,85 @@ export default function SplashPage({ children }) {
             Welcome To
           </motion.p>
 
-          <motion.div
+          <motion.h1
             style={{
               y: titleY,
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              alignItems: 'center',
-              gap: 'clamp(1px, 0.45vw, 6px)',
-              margin: '0 auto 20px',
-              width: 'min(92vw, 980px)',
-              overflow: 'hidden',
+              margin: '0 auto 30px',
+              width: 'min(92vw, 760px)',
+              lineHeight: 0.88,
             }}
           >
-            {titleLetters.map((letter, index) => (
-              <motion.span
-                key={`${letter}-${index}`}
-                initial={{ opacity: 0, y: 60, scale: 0.5 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{
-                  delay: 0.4 + index * 0.05,
-                  duration: 0.5,
-                  type: 'spring',
-                  stiffness: 220,
-                }}
+            <motion.span
+              initial={{ opacity: 0, y: 48, letterSpacing: '0.1em' }}
+              animate={{ opacity: 1, y: 0, letterSpacing: '-0.06em' }}
+              transition={{ delay: 0.34, duration: 0.65, ease: 'easeOut' }}
+              style={{
+                display: 'block',
+                fontFamily: 'Syne, sans-serif',
+                fontWeight: 800,
+                fontSize: 'clamp(2.9rem, 10vw, 8rem)',
+                letterSpacing: '-0.06em',
+                textTransform: 'uppercase',
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.98) 0%, #d8b4fe 24%, #8b9bff 58%, #67e8f9 100%)',
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                textShadow: '0 0 30px rgba(122, 92, 255, 0.16)',
+              }}
+            >
+              MR!JK!
+            </motion.span>
+            <motion.span
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.54, duration: 0.6, ease: 'easeOut' }}
+              style={{
+                display: 'block',
+                marginTop: '0.1em',
+                fontFamily: 'Syne, sans-serif',
+                fontWeight: 700,
+                fontSize: 'clamp(2.4rem, 8.2vw, 6.1rem)',
+                letterSpacing: '-0.05em',
+                textTransform: 'uppercase',
+                color: 'rgba(241,245,249,0.96)',
+                textShadow: '0 12px 42px rgba(6, 182, 212, 0.12)',
+              }}
+            >
+              MART
+            </motion.span>
+          </motion.h1>
+
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.9, duration: 0.6 }}
+            className="flex items-center justify-center gap-3 mb-10"
+            style={{ flexWrap: 'wrap' }}
+          >
+            {['Premium App Store', 'Pure Liquid Glass', 'Fast Downloads'].map((item) => (
+              <span
+                key={item}
                 style={{
-                  fontSize: 'clamp(24px, 8vw, 88px)',
-                  fontFamily: 'Syne, sans-serif',
-                  fontWeight: 800,
-                  lineHeight: 0.95,
-                  display: 'inline-block',
-                  padding: '0.04em 0',
-                  background:
-                    letter === ' '
-                      ? 'transparent'
-                      : 'linear-gradient(135deg, #f5d0fe 0%, #a78bfa 35%, #06b6d4 100%)',
-                  WebkitBackgroundClip: letter === ' ' ? 'border-box' : 'text',
-                  backgroundClip: letter === ' ' ? 'border-box' : 'text',
-                  WebkitTextFillColor: letter === ' ' ? 'transparent' : 'transparent',
-                  minWidth: letter === ' ' ? 'clamp(10px, 2vw, 24px)' : 'auto',
-                  textShadow: letter === ' ' ? 'none' : '0 0 24px rgba(124,58,237,0.18)',
+                  fontSize: 'clamp(11px, 1.6vw, 13px)',
+                  padding: '10px 16px',
+                  borderRadius: '999px',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'rgba(226,232,240,0.76)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  backdropFilter: 'blur(20px)',
                 }}
               >
-                {letter === ' ' ? '\u00A0' : letter}
-              </motion.span>
+                {item}
+              </span>
             ))}
           </motion.div>
-
-          <motion.p
-            style={{
-              y: taglineY,
-              opacity,
-              fontSize: 'clamp(13px, 2.6vw, 18px)',
-              color: 'rgba(255,255,255,0.62)',
-              fontFamily: 'DM Sans, sans-serif',
-              margin: '0 auto 48px',
-              maxWidth: 'min(88vw, 540px)',
-              lineHeight: 1.7,
-            }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 1.1, duration: 0.8 }}
-          >
-            Your personal app universe, built for smooth discovery, clean downloads, and a storefront that feels alive on every screen.
-          </motion.p>
 
           <motion.button
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 1.45, duration: 0.5 }}
+            transition={{ delay: 1.15, duration: 0.5 }}
             onClick={() => {
               document.getElementById('home-section')?.scrollIntoView({ behavior: 'smooth' });
             }}
@@ -204,14 +227,17 @@ export default function SplashPage({ children }) {
             whileTap={{ scale: 0.97 }}
             className="btn-gradient"
             style={{
-              padding: 'clamp(11px, 2vw, 15px) clamp(24px, 4vw, 40px)',
+              y: taglineY,
+              opacity,
+              padding: 'clamp(12px, 2vw, 16px) clamp(28px, 4vw, 44px)',
               borderRadius: '999px',
               fontSize: 'clamp(13px, 2vw, 16px)',
-              boxShadow: '0 0 30px rgba(124,58,237,0.42)',
+              boxShadow: '0 0 36px rgba(124,58,237,0.32)',
             }}
           >
             Enter
           </motion.button>
+          </motion.div>
         </div>
 
         <motion.div

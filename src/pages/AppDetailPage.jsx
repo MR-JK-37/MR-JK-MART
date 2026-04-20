@@ -274,105 +274,163 @@ export default function AppDetailPage() {
         exit={{ opacity: 0 }}
         className="max-w-5xl mx-auto px-4 md:px-8 pt-20 pb-16 relative z-10"
       >
-        {/* App Hero Section */}
-        <div className="flex flex-col items-center text-center mb-12">
-          {/* Centralized Icon */}
-          <motion.div 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="w-32 h-32 md:w-40 md:h-40 rounded-[2.5rem] overflow-hidden mb-6 glass-border shadow-2xl relative"
-            style={{ 
-              border: '4px solid rgba(255,255,255,0.1)',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.4)'
-             }}
-          >
-            {iconUrl ? (
-              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full gradient-bg flex items-center justify-center">
-                <span className="text-5xl font-display font-bold">{app.name?.charAt(0)}</span>
-              </div>
-            )}
-          </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 180, damping: 22 }}
+          className="liquid-glass relative overflow-hidden mb-12"
+          style={{
+            borderRadius: '32px',
+            padding: 'clamp(20px, 4vw, 32px)',
+            boxShadow: '0 30px 90px rgba(4, 10, 30, 0.34)',
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background:
+                'radial-gradient(circle at top left, rgba(167,139,250,0.2), transparent 34%), radial-gradient(circle at right, rgba(34,211,238,0.16), transparent 28%)',
+              pointerEvents: 'none',
+            }}
+          />
 
-          <h1 className="font-display text-4xl md:text-6xl font-black mb-4 tracking-tight">{app.name}</h1>
-          <p className="font-body text-lg md:text-xl opacity-60 mb-8 max-w-2xl mx-auto">{app.shortDesc}</p>
-
-          {/* Platform & Version Badges */}
-          <div className="flex flex-wrap justify-center gap-2 mb-10">
-            <span className="glass-pill text-xs font-bold px-4 py-1.5 uppercase tracking-wider bg-white/10">v{app.version || '1.0.0'}</span>
-            {app.category && <span className="glass-pill text-xs font-bold px-4 py-1.5 uppercase tracking-wider bg-violet-500/20 text-violet-300">{app.category}</span>}
-            {app.platform?.map(p => (
-              <span key={p} className="glass-pill text-xs font-bold px-4 py-1.5 uppercase tracking-wider bg-white/5">{p}</span>
-            ))}
-          </div>
-
-          {/* Primary Action Button */}
-          <div className="flex flex-col items-center gap-4">
-            <motion.button
-              whileHover={{ scale: 1.05, filter: 'brightness(1.1)' }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleDownload}
-              disabled={downloading}
-              className="relative group p-[2px] rounded-full overflow-hidden"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-violet-600 via-cyan-500 to-violet-600 animate-gradient-x" />
-              <div className="relative px-12 py-4 bg-black/40 backdrop-blur-xl rounded-full flex items-center gap-4 transition-all duration-300 group-hover:bg-transparent">
-                {downloadStatus === 'idle' ? (
-                  <>
-                    <Download size={24} className="text-white" />
-                    <span className="text-lg font-bold text-white pr-4">Download Now</span>
-                    {app.fileSize && (
-                      <span className="pl-4 border-l border-white/20 text-sm font-medium opacity-60">{app.fileSize}</span>
-                    )}
-                  </>
+          <div className="relative z-[1] flex flex-col gap-8">
+            <div className="flex flex-col md:flex-row md:items-start gap-6 md:gap-7">
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="w-28 h-28 md:w-32 md:h-32 rounded-[28px] overflow-hidden flex-shrink-0"
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.18)',
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), 0 18px 40px rgba(2,6,23,0.28)',
+                }}
+              >
+                {iconUrl ? (
+                  <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="loader-ring w-5 h-5 border-2" />
-                    <span className="text-lg font-bold text-white capitalize">{downloadStatus}...</span>
+                  <div className="w-full h-full gradient-bg flex items-center justify-center">
+                    <span className="text-4xl font-display font-bold">{app.name?.charAt(0)}</span>
                   </div>
                 )}
+              </motion.div>
+
+              <div className="flex-1 min-w-0 text-left">
+                <h1
+                  className="font-display uppercase tracking-tight"
+                  style={{
+                    fontSize: 'clamp(2.2rem, 5.4vw, 4.25rem)',
+                    fontWeight: 800,
+                    lineHeight: 0.95,
+                    letterSpacing: '-0.04em',
+                    textWrap: 'balance',
+                  }}
+                >
+                  {app.name}
+                </h1>
+                <p
+                  className="font-body mt-4 max-w-3xl"
+                  style={{
+                    fontSize: 'clamp(1rem, 2.1vw, 1.25rem)',
+                    color: 'rgba(226,232,240,0.62)',
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {app.shortDesc}
+                </p>
+
+                <div className="flex flex-wrap gap-2 mt-5">
+                  <span className="glass-pill text-xs font-semibold px-4 py-1.5">v{app.version || '1.0.0'}</span>
+                  {app.category && (
+                    <span className="glass-pill text-xs font-semibold px-4 py-1.5">
+                      <Tag size={12} />
+                      {app.category}
+                    </span>
+                  )}
+                  {app.platform?.map((platform) => (
+                    <span key={platform} className="glass-pill text-xs font-semibold px-4 py-1.5">
+                      {platform}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="mt-6 flex justify-start">
+                  <motion.button
+                    whileHover={{ scale: 1.02, filter: 'brightness(1.08)' }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="relative overflow-hidden"
+                    style={{
+                      border: '1px solid rgba(104, 89, 255, 0.35)',
+                      borderRadius: '18px',
+                      background: 'linear-gradient(90deg, rgba(123,92,255,0.92) 0%, rgba(41,153,255,0.92) 55%, rgba(46,196,240,0.94) 100%)',
+                      boxShadow: '0 18px 40px rgba(45, 120, 255, 0.2)',
+                    }}
+                  >
+                    <div
+                      className="flex items-center"
+                      style={{
+                        minHeight: '58px',
+                        minWidth: 'min(78vw, 360px)',
+                      }}
+                    >
+                      {downloadStatus === 'idle' ? (
+                        <>
+                          <div className="flex items-center gap-3 px-5 md:px-6 text-white font-semibold text-base">
+                            <Download size={21} />
+                            <span>Download v{app.version || '1.0.0'}</span>
+                          </div>
+                          {app.fileSize && (
+                            <div
+                              className="ml-auto px-5 md:px-6 text-sm font-medium text-white/85"
+                              style={{
+                                borderLeft: '1px solid rgba(255,255,255,0.24)',
+                                minHeight: '58px',
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                            >
+                              {app.fileSize}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-3 px-6 text-white font-semibold text-base">
+                          <div className="loader-ring w-5 h-5 border-2" />
+                          <span className="capitalize">{downloadStatus}...</span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.button>
+                </div>
               </div>
-            </motion.button>
-            <p className="text-[10px] uppercase tracking-[0.2em] opacity-30 font-bold">Secure Verified Download</p>
+            </div>
+
+            <div
+              className="flex flex-wrap gap-3 pt-6"
+              style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <ActionChip
+                onClick={handleLike}
+                active={liked}
+                icon={<Heart size={18} fill={liked ? 'currentColor' : 'none'} />}
+                label={app.showLikes !== false ? likeCount : 'Like'}
+              />
+              <ActionChip
+                onClick={handleShare}
+                icon={<Share2 size={18} />}
+                label="Share"
+              />
+              <ActionChip
+                onClick={() => setCommentsOpen(true)}
+                icon={<MessageCircle size={18} />}
+                label={app.showComments !== false ? `${commentCount} Comments` : 'Comments'}
+              />
+            </div>
           </div>
-        </div>
-
-        {/* Action Bar */}
-        <div className="flex items-center justify-center gap-3 mb-12">
-          {/* Like */}
-          <motion.button
-            whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={handleLike}
-            className={`flex items-center gap-2 px-6 py-3 rounded-2xl glass transition-all ${liked ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'hover:bg-white/10'}`}
-          >
-            <Heart size={20} fill={liked ? 'currentColor' : 'none'} />
-            <span className="font-bold text-sm">{app.showLikes !== false ? likeCount : 'Like'}</span>
-          </motion.button>
-
-          {/* Share */}
-          <motion.button
-             whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={handleShare}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl glass hover:bg-white/10 transition-all"
-          >
-            <Share2 size={20} />
-            <span className="font-bold text-sm">Share</span>
-          </motion.button>
-
-          {/* Comments */}
-          <motion.button
-             whileHover={{ y: -2 }}
-            whileTap={{ scale: 0.9 }}
-            onClick={() => setCommentsOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl glass hover:bg-white/10 transition-all"
-          >
-            <MessageCircle size={20} />
-            <span className="font-bold text-sm">{app.showComments !== false ? commentCount : 'Comments'}</span>
-          </motion.button>
-        </div>
+        </motion.div>
 
       {/* Preview Images */}
       {previewUrls.length > 0 && (
@@ -523,6 +581,26 @@ function InfoCard({ icon, label, value }) {
       <p className="text-xs opacity-40 mb-1">{label}</p>
       <p className="text-sm font-semibold truncate">{value}</p>
     </div>
+  );
+}
+
+function ActionChip({ onClick, icon, label, active = false }) {
+  return (
+    <motion.button
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.97 }}
+      onClick={onClick}
+      className="flex items-center gap-2.5 px-5 py-3 rounded-[18px] transition-all"
+      style={{
+        background: active ? 'rgba(248,113,113,0.15)' : 'rgba(255,255,255,0.08)',
+        border: active ? '1px solid rgba(248,113,113,0.28)' : '1px solid rgba(255,255,255,0.12)',
+        color: active ? '#fca5a5' : 'rgba(226,232,240,0.78)',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.14)',
+      }}
+    >
+      {icon}
+      <span className="text-sm font-medium">{label}</span>
+    </motion.button>
   );
 }
 
