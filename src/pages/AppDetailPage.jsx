@@ -92,20 +92,22 @@ export default function AppDetailPage() {
     setDownloadStatus('preparing');
 
     if (app.downloadUrl) {
-      window.open(app.downloadUrl, '_blank');
+      const link = document.createElement('a');
+      link.href = app.downloadUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.download = app.fileName || 'download';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       await incrementDownload(app.id);
-      setDownloading(false);
-      setDownloadStatus('idle');
-      return;
-    }
-
-    if (app.fileData instanceof ArrayBuffer) {
+    } else if (app.fileData instanceof ArrayBuffer) {
       let finalBuffer = app.fileData;
       if (app.compressed) {
         setDownloadStatus('decompressing');
         finalBuffer = await decompressFile(app.fileData);
       }
-      
+
       const blob = new Blob([finalBuffer], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -115,7 +117,6 @@ export default function AppDetailPage() {
       link.click();
       document.body.removeChild(link);
       setTimeout(() => URL.revokeObjectURL(url), 2000);
-      
       await incrementDownload(app.id);
     } else if (typeof app.fileData === 'string' && app.fileData.startsWith('data:')) {
       const link = document.createElement('a');
@@ -137,7 +138,7 @@ export default function AppDetailPage() {
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(url), 2000);
         await incrementDownload(app.id);
-      } catch (err) {
+      } catch {
         toast.error('Failed to read from local file system handle.');
       }
     } else {
@@ -370,21 +371,11 @@ export default function AppDetailPage() {
                         <>
                           <div className="flex items-center gap-3 px-5 md:px-6 text-white font-semibold text-base">
                             <Download size={21} />
-                            <span>Download v{app.version || '1.0.0'}</span>
+                            <span>
+                              Download v{app.version || '1.0.0'}
+                              {app.fileSize ? `  •  ${app.fileSize}` : ''}
+                            </span>
                           </div>
-                          {app.fileSize && (
-                            <div
-                              className="ml-auto px-5 md:px-6 text-sm font-medium text-white/85"
-                              style={{
-                                borderLeft: '1px solid rgba(255,255,255,0.24)',
-                                minHeight: '58px',
-                                display: 'flex',
-                                alignItems: 'center',
-                              }}
-                            >
-                              {app.fileSize}
-                            </div>
-                          )}
                         </>
                       ) : (
                         <div className="flex items-center gap-3 px-6 text-white font-semibold text-base">

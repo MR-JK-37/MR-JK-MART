@@ -5,15 +5,11 @@ import GlassModal from '../ui/GlassModal';
 import GlassButton from '../ui/GlassButton';
 import useToastStore from '../../store/useToastStore';
 import {
-  CLOUDINARY_RAW_FILE_LIMIT_BYTES,
-  getCloudinaryRawLimitMessage,
   uploadImage,
-  uploadMultipleImages,
-  uploadAppFile,
-  formatFileSize
+  uploadMultipleImages
 } from '../../services/cloudinary';
+import { uploadToGitHub, formatFileSize } from '../../services/githubRelease';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
-import { getAppVersion } from '../../utils/versionCheck';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const PLATFORMS = [
@@ -54,7 +50,6 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const [externalUrl, setExternalUrl] = useState('');
   const iconInputRef = useRef(null);
   const previewInputRef = useRef(null);
-  const selectedAppFileTooLarge = form.appFile?.size > CLOUDINARY_RAW_FILE_LIMIT_BYTES;
 
   useEffect(() => {
     if (editingApp) {
@@ -233,26 +228,26 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     // Auto-fill filename and size
     handleChange('fileName', file.name);
     handleChange('fileSize', formatFileSize(file.size));
-
-    if (file.size > CLOUDINARY_RAW_FILE_LIMIT_BYTES) {
-      const message = getCloudinaryRawLimitMessage(file);
-      setUploadStatus('error');
-      setUploadError(message);
-      setUploadProgress(0);
-      toast.error(message);
-    }
   };
 
 
   const uploadAppFileIfNeeded = async () => {
-    if (uploadMode === 'file' && form.appFile && uploadStatus !== 'done') {
+    if (uploadMode === 'url') {
+      return externalUrl.trim() || null;
+    }
+
+    if (uploadStatus === 'done') {
+      return uploadedFileUrl;
+    }
+
+    if (uploadMode === 'file' && form.appFile) {
       setUploadStatus('uploading');
       setUploadError('');
       setUploadProgress(0);
       setUploadedBytes(0);
       setTotalBytes(form.appFile.size);
       try {
-        const result = await uploadAppFile(
+        const result = await uploadToGitHub(
           form.appFile,
           (percent, loaded, total) => {
             setUploadProgress(percent);
@@ -263,18 +258,23 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         );
         setUploadedFileUrl(result.url);
         setUploadStatus('done');
+        if (!form.fileName) {
+          handleChange('fileName', result.name);
+        }
+        if (!form.fileSize) {
+          handleChange('fileSize', formatFileSize(result.size));
+        }
         return result.url;
       } catch (err) {
         setUploadStatus('error');
         setUploadProgress(0);
         setFileProgress(0);
-        setUploadError(err.message || 'File upload failed');
-        throw new Error(err.message || 'File upload failed');
+        setUploadError(err.message || 'Upload failed');
+        throw new Error(`Upload failed: ${err.message}`);
       }
     }
-    if (uploadMode === 'url') return externalUrl;
-    if (uploadStatus === 'done') return uploadedFileUrl;
-    return form.downloadUrl || editingApp?.downloadUrl;
+
+    return null;
   };
 
   const editStep = (index) => {
@@ -315,20 +315,12 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     }
 
     // Validate
-    const finalUrl = uploadMode === 'url' ? externalUrl : (uploadStatus === 'done' ? uploadedFileUrl : null);
     if (uploadMode === 'url' && !externalUrl.trim()) {
       toast.error('Please provide a download URL');
       return;
     }
     if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
       toast.error('Please select a file to upload');
-      return;
-    }
-    if (uploadMode === 'file' && appFile?.size > CLOUDINARY_RAW_FILE_LIMIT_BYTES) {
-      const message = getCloudinaryRawLimitMessage(appFile);
-      setUploadStatus('error');
-      setUploadError(message);
-      toast.error(message);
       return;
     }
 
@@ -655,15 +647,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   fontSize: '12px',
                   fontWeight: 600,
                 }}>
-                  Upload backend: Cloudinary · version {getAppVersion()}
-                </p>
-                <p style={{
-                  margin: '0 0 14px',
-                  color: 'rgba(255,255,255,0.48)',
-                  fontSize: '12px',
-                  lineHeight: 1.5,
-                }}>
-                  Cloudinary raw upload limit: {formatFileSize(CLOUDINARY_RAW_FILE_LIMIT_BYTES)}. For larger APK files, use Paste URL.
+                  GitHub Releases upload
                 </p>
                 
                 {/* Drop zone */}
@@ -714,7 +698,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        Stored in Cloudinary raw file storage
+                        Any size - APK, EXE, ZIP, any format
                       </p>
                     </div>
                     <span style={{
@@ -726,6 +710,13 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       border: '1px solid rgba(124,58,237,0.4)',
                     }}>
                       Browse Files
+                    </span>
+                    <span style={{
+                      color: '#fde68a',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}>
+                      ⚡ Powered by GitHub Releases
                     </span>
                     <input
                       type="file"
@@ -911,37 +902,10 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     color: '#f87171',
                     fontSize: '13px',
                   }}>
-                    ❌ {uploadError || 'Cloudinary upload failed. Check your Cloudinary upload preset and account limits.'}
-                    {selectedAppFileTooLarge && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUploadMode('url');
-                          setUploadStatus('idle');
-                          setUploadError('');
-                        }}
-                        style={{
-                          display: 'block',
-                          marginTop: '10px',
-                          background: 'rgba(52,211,153,0.18)',
-                          border: '1px solid rgba(52,211,153,0.34)',
-                          borderRadius: '6px',
-                          color: '#34d399',
-                          padding: '6px 12px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                        }}
-                      >
-                        Use Paste URL
-                      </button>
-                    )}
+                    ❌ {uploadError || 'GitHub Releases upload failed. Check your GitHub token and release settings.'}
                     <button
                       type="button"
                       onClick={() => {
-                        if (selectedAppFileTooLarge) {
-                          setForm(p => ({ ...p, appFile: null }));
-                        }
                         setUploadStatus('idle');
                         setUploadError('');
                       }}
@@ -957,7 +921,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '12px',
                       }}
                     >
-                      {selectedAppFileTooLarge ? 'Choose Different File' : 'Try Again'}
+                      Try Again
                     </button>
                   </div>
                 )}
