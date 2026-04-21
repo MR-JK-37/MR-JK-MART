@@ -8,7 +8,7 @@ import {
   uploadImage,
   uploadMultipleImages
 } from '../../services/cloudinary';
-import { uploadToGitHub, formatFileSize } from '../../services/githubRelease';
+import { uploadAppFile, formatFileSize } from '../../services/appUpload';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
@@ -247,7 +247,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       setUploadedBytes(0);
       setTotalBytes(form.appFile.size);
       try {
-        const result = await uploadToGitHub(
+        const result = await uploadAppFile(
           form.appFile,
           (percent, loaded, total) => {
             setUploadProgress(percent);
@@ -647,7 +647,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   fontSize: '12px',
                   fontWeight: 600,
                 }}>
-                  GitHub Releases upload
+                  Direct file upload
                 </p>
                 
                 {/* Drop zone */}
@@ -698,7 +698,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        Any size - APK, EXE, ZIP, any format
+                        APK, EXE, ZIP, any format
                       </p>
                     </div>
                     <span style={{
@@ -716,7 +716,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       fontSize: '12px',
                       fontWeight: 600,
                     }}>
-                      ⚡ Powered by GitHub Releases
+                      Fast direct upload
                     </span>
                     <input
                       type="file"
@@ -902,7 +902,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     color: '#f87171',
                     fontSize: '13px',
                   }}>
-                    ❌ {uploadError || 'GitHub Releases upload failed. Check your GitHub token and release settings.'}
+                    ❌ {uploadError || 'File upload failed. Check your Firebase Storage setup and try again.'}
                     <button
                       type="button"
                       onClick={() => {
