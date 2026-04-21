@@ -43,7 +43,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'uploading' | 'done' | 'error'
+  const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'preparing' | 'uploading' | 'done' | 'error'
   const [uploadError, setUploadError] = useState('');
   const [uploadMode, setUploadMode] = useState('url'); // 'file' or 'url'
   const [uploadedFileUrl, setUploadedFileUrl] = useState('');
@@ -241,7 +241,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     }
 
     if (uploadMode === 'file' && form.appFile) {
-      setUploadStatus('uploading');
+      setUploadStatus('preparing');
       setUploadError('');
       setUploadProgress(0);
       setUploadedBytes(0);
@@ -250,9 +250,10 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         const result = await uploadAppFile(
           form.appFile,
           (percent, loaded, total) => {
+            setUploadStatus('uploading');
             setUploadProgress(percent);
             setUploadedBytes(loaded);
-            setTotalBytes(total);
+            setTotalBytes(total || form.appFile.size);
             setFileProgress(percent);
           }
         );
@@ -787,7 +788,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 )}
 
                 {/* Uploading state — progress bar */}
-                {uploadStatus === 'uploading' && (
+                {(uploadStatus === 'preparing' || uploadStatus === 'uploading') && (
                   <div style={{ padding: '8px 0' }}>
                     <div style={{
                       display: 'flex',
@@ -798,14 +799,16 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         color: 'rgba(255,255,255,0.7)', 
                         fontSize: '13px' 
                       }}>
-                        ⬆️ Uploading {form.appFile?.name}...
+                        {uploadStatus === 'preparing'
+                          ? `⏳ Preparing ${form.appFile?.name}...`
+                          : `⬆️ Uploading ${form.appFile?.name}...`}
                       </span>
                       <span style={{ 
                         color: '#a78bfa', 
                         fontSize: '13px',
                         fontWeight: '600',
                       }}>
-                        {uploadProgress}%
+                        {uploadStatus === 'preparing' ? '...' : `${uploadProgress}%`}
                       </span>
                     </div>
                     
@@ -818,7 +821,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     }}>
                       <div style={{
                         height: '100%',
-                        width: `${uploadProgress}%`,
+                        width: `${uploadStatus === 'preparing' ? 8 : uploadProgress}%`,
                         background: 
                           'linear-gradient(90deg, #7c3aed, #06b6d4)',
                         borderRadius: '999px',
@@ -833,7 +836,9 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       marginTop: '6px',
                       textAlign: 'right',
                     }}>
-                      {formatFileSize(uploadedBytes)} / {formatFileSize(totalBytes)}
+                      {uploadStatus === 'preparing'
+                        ? `Preparing upload / ${formatFileSize(totalBytes || form.appFile?.size)}`
+                        : `${formatFileSize(uploadedBytes)} / ${formatFileSize(totalBytes || form.appFile?.size)}`}
                     </p>
                   </div>
                 )}

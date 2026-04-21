@@ -5,14 +5,29 @@ const tokenEndpoint =
   import.meta.env.VITE_GITHUB_UPLOAD_TOKEN_URL || DEFAULT_TOKEN_ENDPOINT;
 
 async function getUploadSession() {
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({ action: 'create-upload-session' }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  let response;
+  try {
+    response = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ action: 'create-upload-session' }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error?.name === 'AbortError') {
+      throw new Error('GitHub upload session timed out. Check the upload gateway and try again.');
+    }
+    throw error;
+  }
+
+  clearTimeout(timeoutId);
 
   let data = {};
   try {
@@ -88,13 +103,18 @@ export async function uploadAppFile(file, onProgress) {
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
+    let started = false;
 
     xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable && onProgress) {
+      const total = event.lengthComputable ? event.total : file.size;
+      const loaded = event.loaded || 0;
+      const percent = total ? Math.round((loaded / total) * 100) : 0;
+
+      if (onProgress) {
         onProgress(
-          Math.round((event.loaded / event.total) * 100),
-          event.loaded,
-          event.total
+          Math.max(started ? 1 : 0, percent),
+          loaded,
+          total
         );
       }
     });
@@ -131,10 +151,16 @@ export async function uploadAppFile(file, onProgress) {
       reject(new Error('Network error during upload'));
     });
 
+    xhr.addEventListener('abort', () => {
+      reject(new Error('Upload was canceled'));
+    });
+
     xhr.open('POST', uploadUrl);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
     xhr.setRequestHeader('Accept', 'application/vnd.github+json');
+    started = true;
+    onProgress?.(1, 0, file.size);
     xhr.send(file);
   });
 }
