@@ -8,7 +8,7 @@ import {
   uploadImage,
   uploadMultipleImages
 } from '../../services/cloudinary';
-import { uploadToGitHub, formatFileSize } from '../../services/githubRelease';
+import { uploadToMega, formatFileSize } from '../../services/megaStorage';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
@@ -247,7 +247,9 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       setUploadedBytes(0);
       setTotalBytes(form.appFile.size);
       try {
-        const result = await uploadToGitHub(
+        setPublishStep('Connecting to MEGA...');
+
+        const result = await uploadToMega(
           form.appFile,
           (percent, loaded, total) => {
             setUploadStatus('uploading');
@@ -255,10 +257,21 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
             setUploadedBytes(loaded);
             setTotalBytes(total || form.appFile.size);
             setFileProgress(percent);
+
+            if (percent < 20) {
+              setPublishStep('Reading file...');
+            } else if (percent < 95) {
+              setPublishStep(`Uploading to MEGA... ${percent}%`);
+            } else if (percent < 100) {
+              setPublishStep('Generating secure link...');
+            } else {
+              setPublishStep('Upload complete!');
+            }
           }
         );
         setUploadedFileUrl(result.url);
         setUploadStatus('done');
+        setPublishStep('');
         if (!form.fileName) {
           handleChange('fileName', result.name);
         }
@@ -271,6 +284,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         setUploadProgress(0);
         setFileProgress(0);
         setUploadError(err.message || 'Upload failed');
+        setPublishStep('');
         throw new Error(`Upload failed: ${err.message}`);
       }
     }
@@ -648,7 +662,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   fontSize: '12px',
                   fontWeight: 600,
                 }}>
-                  GitHub Releases storage
+                  MEGA cloud upload
                 </p>
                 
                 {/* Drop zone */}
@@ -717,7 +731,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       fontSize: '12px',
                       fontWeight: 600,
                     }}>
-                      ⚡ GitHub Releases storage
+                      ⚡ MEGA Cloud • 20GB Free • No size limit
                     </span>
                     <input
                       type="file"
@@ -800,8 +814,10 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px' 
                       }}>
                         {uploadStatus === 'preparing'
-                          ? `⏳ Preparing ${form.appFile?.name}...`
-                          : `⬆️ Uploading ${form.appFile?.name}...`}
+                          ? '📖 Reading file...'
+                          : uploadProgress >= 95
+                            ? '🔗 Generating secure link...'
+                            : `☁️ Uploading to MEGA... ${uploadProgress}%`}
                       </span>
                       <span style={{ 
                         color: '#a78bfa', 
@@ -862,7 +878,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontWeight: '600',
                         margin: '0 0 2px',
                       }}>
-                        Upload complete!
+                        ✅ Upload complete!
                       </p>
                       <p style={{ 
                         color: 'rgba(255,255,255,0.4)',
@@ -907,7 +923,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     color: '#f87171',
                     fontSize: '13px',
                   }}>
-                    ❌ {uploadError || 'GitHub upload failed. Check the token, releases repo, and network connection.'}
+                    ❌ {uploadError || 'MEGA upload failed. Check your MEGA email, password, and network connection.'}
                     <button
                       type="button"
                       onClick={() => {
@@ -938,7 +954,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
               <div>
                 <input
                   type="url"
-                  placeholder="https://github.com/MR-JK-37/REPO/releases/download/v1.0/app.exe"
+                  placeholder="https://mega.nz/file/your-shared-file"
                   value={externalUrl}
                   onChange={e => setExternalUrl(e.target.value)}
                   style={{
@@ -984,8 +1000,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   }}>
                     📌 Free hosting options:
                   </p>
-                  🐙 GitHub Releases → github.com/MR-JK-37 → 
-                    New release → Upload → Copy URL<br/>
+                  ☁️ MEGA → Upload file → Copy share link<br/>
                   ☁️ Google Drive → Upload → Share → Anyone with link<br/>
                   📁 MediaFire → mediafire.com → Upload → Direct link<br/>
                   🔥 Mega.nz → mega.nz → Upload → Get link
