@@ -8,7 +8,7 @@ import {
   uploadImage,
   uploadMultipleImages
 } from '../../services/cloudinary';
-import { uploadAppFile, formatFileSize } from '../../services/appUpload';
+import { uploadAppFile, formatFileSize } from '../../services/githubRelease';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
@@ -647,7 +647,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   fontSize: '12px',
                   fontWeight: 600,
                 }}>
-                  Direct file upload
+                  GitHub Releases upload
                 </p>
                 
                 {/* Drop zone */}
@@ -698,7 +698,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        APK, EXE, ZIP, any format
+                        Any size - APK, EXE, ZIP, any format
                       </p>
                     </div>
                     <span style={{
@@ -716,7 +716,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       fontSize: '12px',
                       fontWeight: 600,
                     }}>
-                      Fast direct upload
+                      Powered by GitHub Releases
                     </span>
                     <input
                       type="file"
@@ -902,7 +902,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     color: '#f87171',
                     fontSize: '13px',
                   }}>
-                    ❌ {uploadError || 'File upload failed. Check your Firebase Storage setup and try again.'}
+                    ❌ {uploadError || 'GitHub upload failed. Deploy the GitHub upload function and check the GitHub App secrets.'}
                     <button
                       type="button"
                       onClick={() => {
