@@ -1,4 +1,4 @@
-import { Storage } from 'megajs';
+import { Storage } from 'megajs/dist/main.browser-es.mjs';
 import { Buffer } from 'buffer';
 
 const MEGA_EMAIL = import.meta.env.VITE_MEGA_EMAIL;
@@ -7,10 +7,14 @@ const MEGA_PASSWORD = import.meta.env.VITE_MEGA_PASSWORD;
 let storageInstance = null;
 let uploadFolder = null;
 
+export function isMegaConfigured() {
+  return Boolean(MEGA_EMAIL && MEGA_PASSWORD);
+}
+
 function validateConfig() {
   if (!MEGA_EMAIL || !MEGA_PASSWORD) {
     throw new Error(
-      'MEGA not configured. Add VITE_MEGA_EMAIL and VITE_MEGA_PASSWORD to .env file'
+      'Direct MEGA upload is not available in this deployment. Use Paste URL with a MEGA share link.'
     );
   }
 

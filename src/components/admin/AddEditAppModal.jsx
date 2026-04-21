@@ -8,7 +8,7 @@ import {
   uploadImage,
   uploadMultipleImages
 } from '../../services/cloudinary';
-import { uploadToMega, formatFileSize } from '../../services/megaStorage';
+import { uploadToMega, formatFileSize, isMegaConfigured } from '../../services/megaStorage';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
@@ -23,6 +23,7 @@ const PLATFORMS = [
 
 export default function AddEditAppModal({ isOpen, onClose, editingApp = null, onRefresh }) {
   const toast = useToastStore();
+  const megaUploadAvailable = isMegaConfigured();
 
   const [form, setForm] = useState({
     name: '', shortDesc: '', longDesc: '', version: '1.0.0',
@@ -76,7 +77,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         manualSteps: editingApp.manualSteps || [],
         appFile: null
       });
-      setUploadMode('url');
+      setUploadMode(editingApp.downloadUrl || !megaUploadAvailable ? 'url' : 'file');
       setExternalUrl(editingApp.downloadUrl || '');
       setUploadedFileUrl('');
       setUploadStatus('idle');
@@ -240,6 +241,10 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
       return uploadedFileUrl;
     }
 
+    if (uploadMode === 'file' && !megaUploadAvailable) {
+      throw new Error('Direct MEGA upload is unavailable on the live site. Use Paste URL with a MEGA share link.');
+    }
+
     if (uploadMode === 'file' && form.appFile) {
       setUploadStatus('preparing');
       setUploadError('');
@@ -332,6 +337,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     // Validate
     if (uploadMode === 'url' && !externalUrl.trim()) {
       toast.error('Please provide a download URL');
+      return;
+    }
+    if (uploadMode === 'file' && !megaUploadAvailable) {
+      setUploadMode('url');
+      toast.error('Direct MEGA upload is unavailable on the live site. Use Paste URL with a MEGA share link.');
       return;
     }
     if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
@@ -658,15 +668,52 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
               <div>
                 <p style={{
                   margin: '0 0 12px',
-                  color: 'rgba(52,211,153,0.82)',
+                  color: megaUploadAvailable
+                    ? 'rgba(52,211,153,0.82)'
+                    : 'rgba(251,191,36,0.9)',
                   fontSize: '12px',
                   fontWeight: 600,
                 }}>
-                  MEGA cloud upload
+                  {megaUploadAvailable
+                    ? 'MEGA cloud upload'
+                    : 'Direct MEGA upload unavailable on GitHub Pages'}
                 </p>
+
+                {!megaUploadAvailable && (
+                  <div style={{
+                    padding: '12px 16px',
+                    marginBottom: '12px',
+                    background: 'rgba(251,191,36,0.1)',
+                    border: '1px solid rgba(251,191,36,0.25)',
+                    borderRadius: '12px',
+                    color: '#fcd34d',
+                    fontSize: '13px',
+                    lineHeight: 1.5,
+                  }}>
+                    This site is a public static deployment, so browser-side MEGA credentials cannot be bundled safely.
+                    Use <strong>Paste URL</strong> with a MEGA share link for live uploads.
+                    <button
+                      type="button"
+                      onClick={() => setUploadMode('url')}
+                      style={{
+                        display: 'block',
+                        marginTop: '10px',
+                        background: 'rgba(251,191,36,0.18)',
+                        border: '1px solid rgba(251,191,36,0.25)',
+                        borderRadius: '8px',
+                        color: '#fde68a',
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Switch to Paste URL
+                    </button>
+                  </div>
+                )}
                 
                 {/* Drop zone */}
-                {uploadStatus === 'idle' && !form.appFile && (
+                {uploadStatus === 'idle' && !form.appFile && megaUploadAvailable && (
                   <label style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -747,7 +794,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 )}
 
                 {/* File selected — show info */}
-                {form.appFile && uploadStatus === 'idle' && (
+                {form.appFile && uploadStatus === 'idle' && megaUploadAvailable && (
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -998,9 +1045,9 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     marginBottom: '8px',
                     fontSize: '13px',
                   }}>
-                    📌 Free hosting options:
+                    📌 Share-link workflow:
                   </p>
-                  ☁️ MEGA → Upload file → Copy share link<br/>
+                  ☁️ MEGA → Upload file in MEGA → Copy public share link → Paste it here<br/>
                   ☁️ Google Drive → Upload → Share → Anyone with link<br/>
                   📁 MediaFire → mediafire.com → Upload → Direct link<br/>
                   🔥 Mega.nz → mega.nz → Upload → Get link
