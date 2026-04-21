@@ -5,7 +5,7 @@ import { Download, Heart, Share2, MessageCircle, Calendar, HardDrive, Monitor, T
 import DOMPurify from 'dompurify';
 import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
-import { getAppById, incrementDownload, getComments, postComment as addComment, setCommentHidden as hideComment, deleteComment, toggleLike } from '../firebase/appService';
+import { getAppById, incrementDownload, getComments, postComment as addComment, setCommentHidden as hideComment, deleteComment, toggleLike, trackAppView } from '../firebase/appService';
 import { decompressFile } from '../utils/fileCompression';
 import GlassCard from '../components/ui/GlassCard';
 import GlassButton from '../components/ui/GlassButton';
@@ -21,7 +21,7 @@ export default function AppDetailPage() {
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
-  const [downloadStatus, setDownloadStatus] = useState('idle'); // idle, preparing, decompressing, done
+  const [downloadStatus, setDownloadStatus] = useState('idle');
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -49,6 +49,14 @@ export default function AppDetailPage() {
     setActivePreview(0);
     setLightboxIndex(0);
   }, [previewUrls.length]);
+
+  useEffect(() => {
+    if (!appId) return;
+    const key = `viewed_${appId}`;
+    if (sessionStorage.getItem(key)) return;
+    trackAppView(appId);
+    sessionStorage.setItem(key, '1');
+  }, [appId]);
 
   const getDateValue = (value) => {
     if (!value) return null;
@@ -87,21 +95,36 @@ export default function AppDetailPage() {
   };
 
   const handleDownload = async () => {
-    if (!app) return;
+    if (!app?.downloadUrl && !app?.fileData && !app?.fileHandle) {
+      toast.error('No download link available');
+      return;
+    }
+
     setDownloading(true);
-    setDownloadStatus('preparing');
+    setDownloadStatus('downloading');
 
     if (app.downloadUrl) {
-      const link = document.createElement('a');
-      link.href = app.downloadUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.download = app.fileName || 'download';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      await incrementDownload(app.id);
+      try {
+        await incrementDownload(app.id);
+        setApp((prev) => prev ? { ...prev, downloadCount: (prev.downloadCount || 0) + 1 } : prev);
+      } catch (e) {
+        console.warn('Count update failed:', e);
+      }
+
+      const a = document.createElement('a');
+      a.href = app.downloadUrl;
+      a.download = app.fileName || 'download';
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => {
+        setDownloading(false);
+        setDownloadStatus('idle');
+      }, 3000);
+      return;
     } else if (app.fileData instanceof ArrayBuffer) {
+      setDownloadStatus('preparing');
       let finalBuffer = app.fileData;
       if (app.compressed) {
         setDownloadStatus('decompressing');
@@ -145,7 +168,6 @@ export default function AppDetailPage() {
       toast.info('No download available for this app');
     }
 
-    setDownloadStatus('done');
     setTimeout(() => {
       setDownloading(false);
       setDownloadStatus('idle');
@@ -380,7 +402,7 @@ export default function AppDetailPage() {
                       ) : (
                         <div className="flex items-center gap-3 px-6 text-white font-semibold text-base">
                           <div className="loader-ring w-5 h-5 border-2" />
-                          <span className="capitalize">{downloadStatus}...</span>
+                          <span>{downloadStatus === 'downloading' ? 'Starting download...' : `${downloadStatus.charAt(0).toUpperCase()}${downloadStatus.slice(1)}...`}</span>
                         </div>
                       )}
                     </div>

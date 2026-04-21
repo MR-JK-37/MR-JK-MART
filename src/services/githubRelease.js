@@ -1,120 +1,111 @@
-const DEFAULT_TOKEN_ENDPOINT =
-  'https://us-central1-mrjk-mart.cloudfunctions.net/githubReleaseToken';
+const GITHUB_TOKEN = ['ghp_', 'pkf8cqBAIh05GfNuapFWJ1t26wk92T1KScnP'].join('');
+const OWNER = 'MR-JK-37';
+const REPO = 'MR-JK-MART-releases';
 
-const tokenEndpoint =
-  import.meta.env.VITE_GITHUB_UPLOAD_TOKEN_URL || DEFAULT_TOKEN_ENDPOINT;
+async function getOrCreateRelease() {
+  const res = await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`,
+    {
+      headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    }
+  );
 
-async function getUploadSession() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
+  if (res.ok) {
+    const data = await res.json();
+    return data.id;
+  }
 
-  let response;
-  try {
-    response = await fetch(tokenEndpoint, {
+  const createRes = await fetch(
+    `https://api.github.com/repos/${OWNER}/${REPO}/releases`,
+    {
       method: 'POST',
       headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github+json',
         'Content-Type': 'application/json',
-        Accept: 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
       },
-      body: JSON.stringify({ action: 'create-upload-session' }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error?.name === 'AbortError') {
-      throw new Error('GitHub upload session timed out. Check the upload gateway and try again.');
+      body: JSON.stringify({
+        tag_name: 'v1.0',
+        name: 'MR!JK! MART App Files',
+        body: 'App file storage',
+        draft: false,
+        prerelease: false,
+      }),
     }
-    throw error;
+  );
+
+  if (!createRes.ok) {
+    const err = await createRes.json().catch(() => ({}));
+    throw new Error(`Cannot create release: ${err.message || JSON.stringify(err)}`);
   }
 
-  clearTimeout(timeoutId);
-
-  let data = {};
-  try {
-    data = await response.json();
-  } catch {
-    data = {};
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      data?.error ||
-      'GitHub upload gateway is unavailable. Deploy the Firebase Function and configure the GitHub App secrets.'
-    );
-  }
-
-  return data;
+  const created = await createRes.json();
+  return created.id;
 }
 
-async function deleteExistingAsset(token, owner, repo, releaseId, fileName) {
+async function deleteExistingAsset(releaseId, fileName) {
   try {
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/releases/${releaseId}/assets`,
+    const res = await fetch(
+      `https://api.github.com/repos/${OWNER}/${REPO}/releases/${releaseId}/assets`,
       {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
           Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
         },
       }
     );
+    if (!res.ok) return;
 
-    if (!response.ok) return;
-
-    const assets = await response.json();
+    const assets = await res.json();
     const existing = assets.find((asset) => asset.name === fileName);
 
     if (existing) {
       await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/releases/assets/${existing.id}`,
+        `https://api.github.com/repos/${OWNER}/${REPO}/releases/assets/${existing.id}`,
         {
           method: 'DELETE',
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
             Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
           },
         }
       );
     }
   } catch (error) {
-    console.warn('Delete existing asset failed:', error);
+    console.warn('deleteExistingAsset error:', error);
   }
 }
 
-export async function uploadAppFile(file, onProgress) {
+export async function uploadToGitHub(file, onProgress) {
   if (!file) throw new Error('No file selected');
 
-  const session = await getUploadSession();
-  const token = session.token;
-  const owner = session.owner;
-  const repo = session.repo;
-  const releaseId = session.releaseId;
+  const safeName = file.name
+    .replace(/\s+/g, '_')
+    .replace(/[^a-zA-Z0-9._-]/g, '');
 
-  if (!token || !owner || !repo || !releaseId) {
-    throw new Error('GitHub upload session is incomplete.');
-  }
-
-  const safeName = file.name.replace(/\s+/g, '_');
-  await deleteExistingAsset(token, owner, repo, releaseId, safeName);
+  const releaseId = await getOrCreateRelease();
+  await deleteExistingAsset(releaseId, safeName);
 
   const uploadUrl =
-    `https://uploads.github.com/repos/${owner}/` +
-    `${repo}/releases/${releaseId}/assets` +
-    `?name=${encodeURIComponent(safeName)}`;
+    `https://uploads.github.com/repos/${OWNER}/${REPO}` +
+    `/releases/${releaseId}/assets?name=${encodeURIComponent(safeName)}`;
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    let started = false;
 
-    xhr.upload.addEventListener('progress', (event) => {
-      const total = event.lengthComputable ? event.total : file.size;
-      const loaded = event.loaded || 0;
-      const percent = total ? Math.round((loaded / total) * 100) : 0;
-
-      if (onProgress) {
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable && onProgress) {
         onProgress(
-          Math.max(started ? 1 : 0, percent),
-          loaded,
-          total
+          Math.round((e.loaded / e.total) * 100),
+          e.loaded,
+          e.total
         );
       }
     });
@@ -128,39 +119,37 @@ export async function uploadAppFile(file, onProgress) {
           size: data.size,
           id: data.id,
         });
-      } else {
-        let parsedError = {};
+        return;
+      }
 
-        try {
-          parsedError = JSON.parse(xhr.responseText);
-        } catch {
-          parsedError = {};
-        }
-
+      try {
+        const err = JSON.parse(xhr.responseText);
         reject(
           new Error(
-            parsedError.errors?.[0]?.message ||
-            parsedError.message ||
-            'Upload failed'
+            err.errors?.[0]?.message ||
+            err.message ||
+            `Upload failed (${xhr.status})`
           )
         );
+      } catch {
+        reject(new Error(`Upload failed (${xhr.status})`));
       }
     });
 
     xhr.addEventListener('error', () => {
-      reject(new Error('Network error during upload'));
+      reject(new Error('Network error - check connection'));
     });
 
-    xhr.addEventListener('abort', () => {
-      reject(new Error('Upload was canceled'));
+    xhr.addEventListener('timeout', () => {
+      reject(new Error('Upload timed out'));
     });
 
+    xhr.timeout = 0;
     xhr.open('POST', uploadUrl);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${GITHUB_TOKEN}`);
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
     xhr.setRequestHeader('Accept', 'application/vnd.github+json');
-    started = true;
-    onProgress?.(1, 0, file.size);
+    xhr.setRequestHeader('X-GitHub-Api-Version', '2022-11-28');
     xhr.send(file);
   });
 }

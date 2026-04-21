@@ -1,22 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, AppWindow, Download, MessageCircle, Mail } from 'lucide-react';
-import useAppStore from '../../store/useAppStore';
-import { getAllApps, getAllContacts, deleteApp } from '../../firebase/appService';
+import { Plus } from 'lucide-react';
+import { getAllApps, getAllContacts, deleteApp, getSiteStats } from '../../firebase/appService';
 import useToastStore from '../../store/useToastStore';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../firebase/config';
 import AppGrid from '../../components/apps/AppGrid';
 import AddEditAppModal from '../../components/admin/AddEditAppModal';
-import GlassCard from '../../components/ui/GlassCard';
 
 export default function AdminHomePage() {
   const [apps, setApps] = useState([]);
-  const [contacts, setContacts] = useState([]);
   const [editingApp, setEditingApp] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [stats, setStats] = useState({ apps: 0, downloads: 0, comments: 0, contacts: 0 });
+  const [stats, setStats] = useState({
+    totalApps: 0,
+    totalDownloads: 0,
+    totalViews: 0,
+    totalSiteViews: 0,
+    unreadContacts: 0,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
@@ -25,19 +26,22 @@ export default function AdminHomePage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [allApps, allContacts, commentsSnap] = await Promise.all([
+      const [allApps, allContacts, siteStats] = await Promise.all([
         getAllApps(),
         getAllContacts(),
-        getDocs(collection(db, 'comments'))
+        getSiteStats(),
       ]);
-      
+
       const appsList = allApps || [];
       setApps(appsList);
-      setContacts(allContacts || []);
-      
-      const totalDownloads = appsList.reduce((sum, app) => sum + (app.downloadCount || 0), 0);
       const unreadContacts = allContacts.filter(c => !c.read).length;
-      setStats({ apps: appsList.length, downloads: totalDownloads, comments: commentsSnap.size, contacts: unreadContacts });
+      setStats({
+        totalApps: appsList.length,
+        totalDownloads: appsList.reduce((sum, app) => sum + (app.downloadCount || 0), 0),
+        totalViews: appsList.reduce((sum, app) => sum + (app.viewCount || 0), 0),
+        totalSiteViews: siteStats.totalViews || 0,
+        unreadContacts,
+      });
     } catch (err) {
       console.error('AdminHomePage load error:', err);
       setError(err.message);
@@ -119,18 +123,84 @@ export default function AdminHomePage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-        <StatCard icon={<AppWindow size={22} />} label="Total Apps" value={stats.apps} color="#7c3aed" />
-        <StatCard icon={<Download size={22} />} label="Downloads" value={stats.downloads} color="#06b6d4" />
-        <StatCard icon={<MessageCircle size={22} />} label="Comments" value={stats.comments} color="#22c55e" />
-        <StatCard
-          icon={<Mail size={22} />}
-          label="Unread Contacts"
-          value={stats.contacts}
-          color="#f59e0b"
-          onClick={() => navigate('/admin/contacts')}
-        />
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: '12px',
+        marginBottom: '32px',
+      }}>
+        {[
+          { label: 'Total Apps', value: stats.totalApps, icon: '📦', color: '#7c3aed' },
+          { label: 'Downloads', value: stats.totalDownloads, icon: '⬇️', color: '#06b6d4' },
+          { label: 'App Views', value: stats.totalViews, icon: '👁️', color: '#8b5cf6' },
+          { label: 'Site Visits', value: stats.totalSiteViews, icon: '🌐', color: '#10b981' },
+          {
+            label: 'Messages',
+            value: stats.unreadContacts,
+            icon: '📬',
+            color: '#f59e0b',
+            badge: stats.unreadContacts > 0,
+            onClick: () => navigate('/admin/contacts'),
+          },
+        ].map((stat) => (
+          <button
+            key={stat.label}
+            type="button"
+            onClick={stat.onClick}
+            style={{
+              padding: '16px 20px',
+              background: 'rgba(255,255,255,0.05)',
+              border: `1px solid ${stat.color}30`,
+              borderRadius: '16px',
+              backdropFilter: 'blur(12px)',
+              position: 'relative',
+              overflow: 'hidden',
+              textAlign: 'left',
+              cursor: stat.onClick ? 'pointer' : 'default',
+            }}
+          >
+            <div style={{
+              position: 'absolute',
+              top: '-20px',
+              right: '-20px',
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              background: `${stat.color}20`,
+              filter: 'blur(20px)',
+            }} />
+            <div style={{ fontSize: '24px', marginBottom: '8px' }}>{stat.icon}</div>
+            <div style={{
+              fontSize: 'clamp(20px, 3vw, 28px)',
+              fontWeight: 700,
+              color: 'white',
+              fontFamily: 'Syne, sans-serif',
+              lineHeight: 1,
+              marginBottom: '4px',
+            }}>
+              {stat.value.toLocaleString()}
+            </div>
+            <div style={{
+              fontSize: '12px',
+              color: 'rgba(255,255,255,0.5)',
+              fontFamily: 'DM Sans, sans-serif',
+            }}>
+              {stat.label}
+            </div>
+            {stat.badge && (
+              <div style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: '#f59e0b',
+                boxShadow: '0 0 8px #f59e0b',
+              }} />
+            )}
+          </button>
+        ))}
       </div>
 
       {/* App Grid */}
@@ -163,20 +233,5 @@ export default function AdminHomePage() {
         onRefresh={loadData}
       />
     </motion.div>
-  );
-}
-
-function StatCard({ icon, label, value, color, onClick }) {
-  return (
-    <GlassCard
-      liquid
-      onClick={onClick}
-      hover={!!onClick}
-      className="p-5 text-center"
-    >
-      <div className="flex justify-center mb-3" style={{ color }}>{icon}</div>
-      <p className="font-display text-2xl font-bold mb-1">{value}</p>
-      <p className="text-xs opacity-50">{label}</p>
-    </GlassCard>
   );
 }

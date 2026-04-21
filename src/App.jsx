@@ -7,6 +7,7 @@ import ToastContainer from './components/layout/ToastContainer';
 import CursorEffect from './components/effects/CursorEffect';
 import BackgroundOrbs from './components/effects/BackgroundOrbs';
 import PageLoader from './components/effects/PageLoader';
+import { trackSiteVisit } from './firebase/appService';
 
 // Pages
 import IndexPage from './pages/IndexPage';
@@ -109,6 +110,12 @@ export default function App() {
     // Initialize theme
     const saved = localStorage.getItem('mrjk-theme') || 'dark';
     setTheme(saved);
+  }, []);
+
+  useEffect(() => {
+    if (sessionStorage.getItem('site_visited')) return;
+    trackSiteVisit();
+    sessionStorage.setItem('site_visited', '1');
   }, []);
 
   return (

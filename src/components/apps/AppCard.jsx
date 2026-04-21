@@ -148,9 +148,22 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
           </div>
 
           <div className="app-card-footer mt-auto flex items-center justify-between rounded-2xl px-4 py-3 bg-black/15 border border-white/10">
-            <div className="flex items-center gap-2 text-sm opacity-75">
-              <Download size={14} className="text-cyan-300" />
-              <span>{app.downloadCount || 0} downloads</span>
+            <div className="flex flex-col gap-1 text-sm opacity-75">
+              <div className="flex items-center gap-2">
+                <Download size={14} className="text-cyan-300" />
+                <span>{app.downloadCount || 0} downloads</span>
+              </div>
+              {isAdmin && (
+                <div style={{
+                  fontSize: '12px',
+                  color: 'rgba(255,255,255,0.4)',
+                  display: 'flex',
+                  gap: '12px',
+                }}>
+                  <span>⬇ {app.downloadCount || 0}</span>
+                  <span>👁 {app.viewCount || 0} views</span>
+                </div>
+              )}
             </div>
             <motion.span
               initial={{ opacity: 0.7 }}

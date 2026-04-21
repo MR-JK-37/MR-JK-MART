@@ -36,6 +36,7 @@ export async function createApp(data) {
   const docRef = await addDoc(collection(db, 'apps'), {
     ...data,
     downloadCount: 0,
+    viewCount: 0,
     likeCount: 0,
     commentCount: 0,
     createdAt: serverTimestamp(),
@@ -74,6 +75,37 @@ export async function incrementDownload(id) {
   await updateDoc(doc(db, 'apps', id), {
     downloadCount: increment(1),
   });
+}
+
+export async function trackAppView(appId) {
+  try {
+    await updateDoc(doc(db, 'apps', appId), {
+      viewCount: increment(1),
+    });
+  } catch (e) {
+    console.warn('View track failed:', e);
+  }
+}
+
+export async function trackSiteVisit() {
+  try {
+    await setDoc(
+      doc(db, 'settings', 'siteStats'),
+      { totalViews: increment(1) },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn('Site visit track failed:', e);
+  }
+}
+
+export async function getSiteStats() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'siteStats'));
+    return snap.exists() ? snap.data() : { totalViews: 0 };
+  } catch (e) {
+    return { totalViews: 0 };
+  }
 }
 
 export async function toggleLike(id, isLiking) {
