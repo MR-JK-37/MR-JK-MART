@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -73,9 +73,10 @@ export default function AdminHomePage() {
     },
   ];
 
-  const loadStats = async () => {
+  const refreshDashboard = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const [apps, contacts, siteStats] = await Promise.all([
         getAllApps(),
         getAllContacts(),
@@ -98,16 +99,16 @@ export default function AdminHomePage() {
       });
       setApps(apps);
     } catch (err) {
-      console.error('loadStats error:', err);
+      console.error('refreshDashboard error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadStats();
-  }, []);
+    refreshDashboard();
+  }, [refreshDashboard]);
 
   const handleEditApp = (app) => {
     setEditingApp(app);
@@ -128,7 +129,7 @@ export default function AdminHomePage() {
     try {
       await deleteApp(appId);
       toast.success(`"${appName}" deleted`);
-      await loadStats();
+      await refreshDashboard();
     } catch (err) {
       toast.error('Delete failed: ' + err.message);
       console.error('Delete error:', err);
@@ -152,7 +153,7 @@ export default function AdminHomePage() {
         <div className="text-center p-8">
           <p className="text-red-400 text-xl mb-4">Failed to load: {error}</p>
           <button 
-            onClick={loadData}
+            onClick={refreshDashboard}
             className="px-6 py-3 bg-violet-600 rounded-xl text-white hover:bg-violet-700"
           >
             Retry
@@ -276,7 +277,7 @@ export default function AdminHomePage() {
           setEditingApp(null);
         }}
         editingApp={editingApp}
-        onRefresh={loadData}
+        onRefresh={refreshDashboard}
       />
     </motion.div>
   );
