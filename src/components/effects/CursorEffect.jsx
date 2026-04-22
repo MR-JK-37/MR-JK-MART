@@ -1,23 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export default function CursorEffect() {
+  const isMobile = useIsMobile();
   const dotRef = useRef(null);
   const ringRef = useRef(null);
   const [isHovering, setIsHovering] = useState(false);
-  const [isTouch, setIsTouch] = useState(false);
   const mouse = useRef({ x: -100, y: -100 });
   const dotPos = useRef({ x: -100, y: -100 });
   const ringPos = useRef({ x: -100, y: -100 });
   const raf = useRef(null);
 
   useEffect(() => {
-    // Detect touch device
-    const checkTouch = () => {
-      setIsTouch('ontouchstart' in window || navigator.maxTouchPoints > 0);
-    };
-    checkTouch();
-    if (isTouch) return;
+    if (isMobile) return undefined;
 
     document.documentElement.classList.add('cursor-custom');
 
@@ -74,9 +69,9 @@ export default function CursorEffect() {
       cancelAnimationFrame(raf.current);
       document.documentElement.classList.remove('cursor-custom');
     };
-  }, [isTouch]);
+  }, [isMobile]);
 
-  if (isTouch) return null;
+  if (isMobile) return null;
 
   return (
     <>

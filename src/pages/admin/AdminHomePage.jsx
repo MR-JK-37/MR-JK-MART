@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import {
+  Package,
+  Download,
+  Eye,
+  Globe,
+  MessageSquare,
+  Plus,
+} from 'lucide-react';
 import { getAllApps, getAllContacts, deleteApp, getSiteStats } from '../../firebase/appService';
 import useToastStore from '../../store/useToastStore';
 import AppGrid from '../../components/apps/AppGrid';
 import AddEditAppModal from '../../components/admin/AddEditAppModal';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { glassStyle } from '../../utils/glassStyle';
 
 export default function AdminHomePage() {
   const [apps, setApps] = useState([]);
@@ -22,28 +31,74 @@ export default function AdminHomePage() {
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   const toast = useToastStore();
+  const isMobile = useIsMobile();
 
-  const loadData = async () => {
+  const STAT_CARDS = [
+    {
+      label: 'Total Apps',
+      value: stats.totalApps,
+      icon: Package,
+      color: '#7c3aed',
+      bg: 'rgba(124,58,237,0.12)',
+    },
+    {
+      label: 'Downloads',
+      value: stats.totalDownloads,
+      icon: Download,
+      color: '#06b6d4',
+      bg: 'rgba(6,182,212,0.12)',
+    },
+    {
+      label: 'App Views',
+      value: stats.totalViews,
+      icon: Eye,
+      color: '#8b5cf6',
+      bg: 'rgba(139,92,246,0.12)',
+    },
+    {
+      label: 'Site Visits',
+      value: stats.totalSiteViews,
+      icon: Globe,
+      color: '#10b981',
+      bg: 'rgba(16,185,129,0.12)',
+    },
+    {
+      label: 'Messages',
+      value: stats.unreadContacts,
+      icon: MessageSquare,
+      color: '#f59e0b',
+      bg: 'rgba(245,158,11,0.12)',
+      showBadge: stats.unreadContacts > 0,
+      onClick: () => navigate('/admin/contacts'),
+    },
+  ];
+
+  const loadStats = async () => {
     try {
       setLoading(true);
-      const [allApps, allContacts, siteStats] = await Promise.all([
+      const [apps, contacts, siteStats] = await Promise.all([
         getAllApps(),
         getAllContacts(),
         getSiteStats(),
       ]);
 
-      const appsList = allApps || [];
-      setApps(appsList);
-      const unreadContacts = allContacts.filter(c => !c.read).length;
+      const unread = contacts.filter((contact) => contact.read === false).length;
       setStats({
-        totalApps: appsList.length,
-        totalDownloads: appsList.reduce((sum, app) => sum + (app.downloadCount || 0), 0),
-        totalViews: appsList.reduce((sum, app) => sum + (app.viewCount || 0), 0),
-        totalSiteViews: siteStats.totalViews || 0,
-        unreadContacts,
+        totalApps: apps.length,
+        totalDownloads: apps.reduce(
+          (sum, app) => sum + (Number(app.downloadCount) || 0),
+          0
+        ),
+        totalViews: apps.reduce(
+          (sum, app) => sum + (Number(app.viewCount) || 0),
+          0
+        ),
+        totalSiteViews: Number(siteStats?.totalViews) || 0,
+        unreadContacts: unread,
       });
+      setApps(apps);
     } catch (err) {
-      console.error('AdminHomePage load error:', err);
+      console.error('loadStats error:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -51,7 +106,7 @@ export default function AdminHomePage() {
   };
 
   useEffect(() => {
-    loadData();
+    loadStats();
   }, []);
 
   const handleEditApp = (app) => {
@@ -73,7 +128,7 @@ export default function AdminHomePage() {
     try {
       await deleteApp(appId);
       toast.success(`"${appName}" deleted`);
-      await loadData(); // refresh list
+      await loadStats();
     } catch (err) {
       toast.error('Delete failed: ' + err.message);
       console.error('Delete error:', err);
@@ -109,8 +164,9 @@ export default function AdminHomePage() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={isMobile ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={isMobile ? { duration: 0 } : undefined}
       exit={{ opacity: 0 }}
       className="max-w-7xl mx-auto px-4 md:px-8 pt-28 pb-16"
     >
@@ -129,74 +185,64 @@ export default function AdminHomePage() {
         gap: '12px',
         marginBottom: '32px',
       }}>
-        {[
-          { label: 'Total Apps', value: stats.totalApps, icon: '📦', color: '#7c3aed' },
-          { label: 'Downloads', value: stats.totalDownloads, icon: '⬇️', color: '#06b6d4' },
-          { label: 'App Views', value: stats.totalViews, icon: '👁️', color: '#8b5cf6' },
-          { label: 'Site Visits', value: stats.totalSiteViews, icon: '🌐', color: '#10b981' },
-          {
-            label: 'Messages',
-            value: stats.unreadContacts,
-            icon: '📬',
-            color: '#f59e0b',
-            badge: stats.unreadContacts > 0,
-            onClick: () => navigate('/admin/contacts'),
-          },
-        ].map((stat) => (
+        {STAT_CARDS.map(({ label, value, icon: Icon, color, bg, showBadge, onClick }) => (
           <button
-            key={stat.label}
+            key={label}
             type="button"
-            onClick={stat.onClick}
+            onClick={onClick}
             style={{
-              padding: '16px 20px',
-              background: 'rgba(255,255,255,0.05)',
-              border: `1px solid ${stat.color}30`,
+              ...glassStyle(isMobile),
+              padding: '20px',
+              background: bg,
+              border: `1px solid ${color}25`,
               borderRadius: '16px',
-              backdropFilter: 'blur(12px)',
               position: 'relative',
               overflow: 'hidden',
+              transition: isMobile ? 'none' : 'transform 0.2s ease, box-shadow 0.2s ease',
               textAlign: 'left',
-              cursor: stat.onClick ? 'pointer' : 'default',
+              cursor: onClick ? 'pointer' : 'default',
             }}
           >
             <div style={{
-              position: 'absolute',
-              top: '-20px',
-              right: '-20px',
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: `${stat.color}20`,
-              filter: 'blur(20px)',
-            }} />
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>{stat.icon}</div>
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: `${color}20`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '12px',
+            }}>
+              <Icon size={20} color={color} strokeWidth={1.5} />
+            </div>
             <div style={{
-              fontSize: 'clamp(20px, 3vw, 28px)',
-              fontWeight: 700,
+              fontSize: '28px',
+              fontWeight: '700',
               color: 'white',
               fontFamily: 'Syne, sans-serif',
               lineHeight: 1,
               marginBottom: '4px',
             }}>
-              {stat.value.toLocaleString()}
+              {value?.toLocaleString() || '0'}
             </div>
             <div style={{
-              fontSize: '12px',
+              fontSize: '13px',
               color: 'rgba(255,255,255,0.5)',
               fontFamily: 'DM Sans, sans-serif',
             }}>
-              {stat.label}
+              {label}
             </div>
-            {stat.badge && (
+            {showBadge && (
               <div style={{
                 position: 'absolute',
-                top: '12px',
-                right: '12px',
+                top: '16px',
+                right: '16px',
                 width: '8px',
                 height: '8px',
                 borderRadius: '50%',
-                background: '#f59e0b',
-                boxShadow: '0 0 8px #f59e0b',
+                background: color,
+                boxShadow: `0 0 8px ${color}`,
+                animation: 'pulse 2s ease-in-out infinite',
               }} />
             )}
           </button>
@@ -213,7 +259,7 @@ export default function AdminHomePage() {
 
       {/* FAB */}
       <motion.button
-        whileHover={{ scale: 1.1 }}
+        whileHover={isMobile ? undefined : { scale: 1.1 }}
         whileTap={{ scale: 0.95 }}
         onClick={handleAddNew}
         className="fixed bottom-8 right-8 w-14 h-14 rounded-full gradient-bg flex items-center justify-center text-white shadow-lg z-50"

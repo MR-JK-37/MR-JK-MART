@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import useAppStore from '../../store/useAppStore';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 const orbs = [
   { color: 'rgba(124, 58, 237, 0.15)', size: 500, x: '10%', y: '20%', delay: 0 },
@@ -19,17 +19,11 @@ const lightOrbs = [
 
 export default function BackgroundOrbs() {
   const theme = useAppStore(s => s.theme);
-  const [isMobile, setIsMobile] = useState(false);
+  const isMobile = useIsMobile();
   const baseOrbs = theme === 'dark' ? orbs : lightOrbs;
-  const orbSet = isMobile ? baseOrbs.slice(0, 2) : baseOrbs;
+  const orbSet = baseOrbs;
 
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 768px)');
-    const update = () => setIsMobile(media.matches);
-    update();
-    media.addEventListener('change', update);
-    return () => media.removeEventListener('change', update);
-  }, []);
+  if (isMobile) return null;
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>

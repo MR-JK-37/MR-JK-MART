@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Download, MoreVertical, Edit, Trash2 } from 'lucide-react';
 import useAppStore from '../../store/useAppStore';
 import GlassCard from '../ui/GlassCard';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export default function AppCard({ app, index = 0, onEdit, onDelete }) {
   const navigate = useNavigate();
@@ -12,6 +13,7 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
   const setPageLoading = useAppStore(s => s.setPageLoading);
   const [showMenu, setShowMenu] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const isMobile = useIsMobile();
   const iconUrl = app.iconUrl || app.icon || '';
   const platforms = (app.platform || []).slice(0, 3);
 
@@ -45,9 +47,9 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30 }}
+      initial={isMobile ? false : { opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, type: 'spring', stiffness: 200 }}
+      transition={isMobile ? { duration: 0 } : { delay: index * 0.05, type: 'spring', stiffness: 200 }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => { setIsHovered(false); setShowMenu(false); }}
       className="app-card relative h-full"
@@ -84,7 +86,7 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
             </button>
             {showMenu && (
               <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: -5 }}
+                initial={isMobile ? false : { opacity: 0, scale: 0.9, y: -5 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 className="absolute right-0 top-full mt-1 glass rounded-xl overflow-hidden min-w-[140px]"
                 style={{ padding: 4 }}
@@ -115,9 +117,9 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
 
         <div className="relative z-[1] flex h-full flex-col">
           <motion.div
-            animate={{ scale: isHovered ? 1.05 : 1, rotate: isHovered ? -1.5 : 0 }}
-            transition={{ type: 'spring', stiffness: 300 }}
             className="w-24 h-24 rounded-[28px] overflow-hidden mb-5 flex items-center justify-center self-center"
+            animate={{ scale: isHovered ? 1.05 : 1, rotate: isHovered ? -1.5 : 0 }}
+            transition={isMobile ? { duration: 0 } : { type: 'spring', stiffness: 300 }}
             style={{
               background: iconUrl ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #7c3aed, #06b6d4)',
               border: '1px solid rgba(255,255,255,0.14)',
@@ -125,7 +127,7 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
             }}
           >
             {iconUrl ? (
-              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" />
+              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             ) : (
               <span className="text-white text-3xl font-display font-bold">
                 {app.name?.charAt(0) || 'A'}
@@ -166,7 +168,7 @@ export default function AppCard({ app, index = 0, onEdit, onDelete }) {
               )}
             </div>
             <motion.span
-              initial={{ opacity: 0.7 }}
+              initial={isMobile ? false : { opacity: 0.7 }}
               animate={{ opacity: isHovered ? 1 : 0.75, x: isHovered ? 4 : 0 }}
               className="text-sm font-medium gradient-text"
             >

@@ -8,6 +8,8 @@ import AdminGate from '../components/admin/AdminGate';
 import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
 import { submitContact, getSettings, saveSettings } from '../firebase/appService';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { glassStyle } from '../utils/glassStyle';
 
 export default function ContactPage() {
   const isAdmin = useAppStore(s => s.isAdmin);
@@ -25,6 +27,7 @@ export default function ContactPage() {
   });
 
   const [socialForm, setSocialForm] = useState({ ...social });
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     loadSocial();
@@ -65,22 +68,23 @@ export default function ContactPage() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={isMobile ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={isMobile ? { duration: 0 } : undefined}
       exit={{ opacity: 0 }}
       className="max-w-2xl mx-auto px-4 md:px-8 pt-28 pb-16"
     >
       <motion.h1
-        initial={{ opacity: 0, y: 20 }}
+        initial={isMobile ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="font-display text-4xl font-bold mb-3 text-center"
       >
         Get in <span className="gradient-text">Touch</span>
       </motion.h1>
       <motion.p
-        initial={{ opacity: 0, y: 20 }}
+        initial={isMobile ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={isMobile ? { duration: 0 } : { delay: 0.1 }}
         className="text-center opacity-60 mb-10 font-body"
       >
         Have a suggestion or feedback? I'd love to hear from you!
@@ -88,12 +92,12 @@ export default function ContactPage() {
 
       {/* Contact Form */}
       <motion.form
-        initial={{ opacity: 0, y: 20 }}
+        initial={isMobile ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={isMobile ? { duration: 0 } : { delay: 0.2 }}
         onSubmit={handleSubmit}
-        className="liquid-glass p-6 md:p-8 mb-10"
-        style={{ borderRadius: 24 }}
+        className="liquid-glass glass-card p-6 md:p-8 mb-10"
+        style={{ ...glassStyle(isMobile), borderRadius: 24 }}
       >
         <div className="space-y-5">
           <div>
@@ -143,9 +147,9 @@ export default function ContactPage() {
 
       {/* Social Links */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={isMobile ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
+        transition={isMobile ? { duration: 0 } : { delay: 0.3 }}
         className="relative"
       >
         <h3 className="font-display text-lg font-bold text-center mb-4">Connect with me</h3>
@@ -214,12 +218,14 @@ export default function ContactPage() {
 }
 
 function SocialIcon({ icon, href, tooltip }) {
+  const isMobile = useIsMobile();
+
   return (
     <motion.a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      whileHover={{ scale: 1.1 }}
+      whileHover={isMobile ? undefined : { scale: 1.1 }}
       whileTap={{ scale: 0.95 }}
       className="w-14 h-14 rounded-2xl glass flex items-center justify-center transition-all hover:border-purple-500/30 group relative"
       title={tooltip}

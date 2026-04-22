@@ -1,15 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { glassStyle } from '../utils/glassStyle';
 
 export default function SplashPage({ children }) {
   const containerRef = useRef(null);
   const { scrollY } = useScroll();
+  const isMobile = useIsMobile();
 
-  const welcomeY = useTransform(scrollY, [0, 600], [0, -60]);
-  const titleY = useTransform(scrollY, [0, 600], [0, -120]);
-  const taglineY = useTransform(scrollY, [0, 600], [0, -180]);
-  const bgY = useTransform(scrollY, [0, 600], [0, -30]);
-  const opacity = useTransform(scrollY, [0, 400], [1, 0]);
+  const welcomeY = useTransform(scrollY, [0, 600], [0, isMobile ? 0 : -60]);
+  const titleY = useTransform(scrollY, [0, 600], [0, isMobile ? 0 : -120]);
+  const taglineY = useTransform(scrollY, [0, 600], [0, isMobile ? 0 : -180]);
+  const bgY = useTransform(scrollY, [0, 600], [0, isMobile ? 0 : -30]);
+  const opacity = useTransform(scrollY, [0, 400], [1, isMobile ? 1 : 0]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -40,8 +43,8 @@ export default function SplashPage({ children }) {
               background: 'radial-gradient(circle, rgba(124,58,237,0.3) 0%, transparent 70%)',
               top: '-100px',
               left: '-100px',
-              animation: 'float1 8s ease-in-out infinite',
-              filter: 'blur(40px)',
+              animation: isMobile ? 'none' : 'float1 8s ease-in-out infinite',
+              filter: isMobile ? 'none' : 'blur(40px)',
             }}
           />
           <div
@@ -53,8 +56,8 @@ export default function SplashPage({ children }) {
               background: 'radial-gradient(circle, rgba(6,182,212,0.25) 0%, transparent 70%)',
               bottom: '-60px',
               right: '-60px',
-              animation: 'float2 10s ease-in-out infinite',
-              filter: 'blur(40px)',
+              animation: isMobile ? 'none' : 'float2 10s ease-in-out infinite',
+              filter: isMobile ? 'none' : 'blur(40px)',
             }}
           />
           <div
@@ -67,8 +70,8 @@ export default function SplashPage({ children }) {
               top: '50%',
               left: '50%',
               transform: 'translate(-50%, -50%)',
-              animation: 'float3 12s ease-in-out infinite',
-              filter: 'blur(60px)',
+              animation: isMobile ? 'none' : 'float3 12s ease-in-out infinite',
+              filter: isMobile ? 'none' : 'blur(60px)',
             }}
           />
         </motion.div>
@@ -109,11 +112,12 @@ export default function SplashPage({ children }) {
           }}
         >
           <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.97 }}
+            initial={isMobile ? false : { opacity: 0, y: 24, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ delay: 0.12, duration: 0.75 }}
-            className="liquid-glass splash-hero-card"
+            transition={isMobile ? { duration: 0 } : { delay: 0.12, duration: 0.75 }}
+            className="liquid-glass glass-card splash-hero-card"
             style={{
+              ...glassStyle(isMobile),
               maxWidth: 'min(92vw, 920px)',
               margin: '0 auto',
               padding: 'clamp(26px, 5vw, 46px)',
@@ -136,7 +140,7 @@ export default function SplashPage({ children }) {
             }}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.8 }}
+            transition={isMobile ? { duration: 0 } : { delay: 0.2, duration: 0.8 }}
           >
             Welcome To
           </motion.p>
@@ -152,7 +156,7 @@ export default function SplashPage({ children }) {
             <motion.span
               initial={{ opacity: 0, y: 48, letterSpacing: '0.1em' }}
               animate={{ opacity: 1, y: 0, letterSpacing: '-0.06em' }}
-              transition={{ delay: 0.34, duration: 0.65, ease: 'easeOut' }}
+              transition={isMobile ? { duration: 0 } : { delay: 0.34, duration: 0.65, ease: 'easeOut' }}
               style={{
                 display: 'block',
                 fontFamily: 'Syne, sans-serif',
@@ -172,7 +176,7 @@ export default function SplashPage({ children }) {
             <motion.span
               initial={{ opacity: 0, y: 40 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.54, duration: 0.6, ease: 'easeOut' }}
+              transition={isMobile ? { duration: 0 } : { delay: 0.54, duration: 0.6, ease: 'easeOut' }}
               style={{
                 display: 'block',
                 marginTop: '0.1em',
@@ -192,7 +196,7 @@ export default function SplashPage({ children }) {
           <motion.div
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.9, duration: 0.6 }}
+            transition={isMobile ? { duration: 0 } : { delay: 0.9, duration: 0.6 }}
             className="flex items-center justify-center gap-3 mb-10"
             style={{ flexWrap: 'wrap' }}
           >
@@ -208,7 +212,7 @@ export default function SplashPage({ children }) {
                   color: 'rgba(226,232,240,0.76)',
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  backdropFilter: 'blur(20px)',
+                  backdropFilter: isMobile ? 'none' : 'blur(20px)',
                 }}
               >
                 {item}
@@ -219,11 +223,11 @@ export default function SplashPage({ children }) {
           <motion.button
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 1.15, duration: 0.5 }}
+            transition={isMobile ? { duration: 0 } : { delay: 1.15, duration: 0.5 }}
             onClick={() => {
               document.getElementById('home-section')?.scrollIntoView({ behavior: 'smooth' });
             }}
-            whileHover={{ scale: 1.05 }}
+            whileHover={isMobile ? undefined : { scale: 1.05 }}
             whileTap={{ scale: 0.97 }}
             className="btn-gradient"
             style={{

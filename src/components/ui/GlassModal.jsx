@@ -1,26 +1,36 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useIsMobile } from '../../hooks/useIsMobile';
+import { glassStyle } from '../../utils/glassStyle';
 
 export default function GlassModal({ isOpen, onClose, children, title, maxWidth = '500px' }) {
+  const isMobile = useIsMobile();
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={isMobile ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] flex items-center justify-center p-4"
           onClick={onClose}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.56)', backdropFilter: 'blur(24px)' }} />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'rgba(0,0,0,0.56)',
+              backdropFilter: isMobile ? 'none' : 'blur(24px)',
+            }}
+          />
 
           {/* Modal */}
           <motion.div
-            initial={{ scale: 0.92, opacity: 0 }}
+            initial={isMobile ? false : { scale: 0.92, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.92, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            exit={isMobile ? { opacity: 0 } : { scale: 0.92, opacity: 0 }}
+            transition={isMobile ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 25 }}
             className="relative w-full overflow-y-auto"
             style={{
               maxWidth,
@@ -33,8 +43,9 @@ export default function GlassModal({ isOpen, onClose, children, title, maxWidth 
             onClick={e => e.stopPropagation()}
           >
             <div
-              className="liquid-glass"
+              className="liquid-glass glass-card"
               style={{
+                ...glassStyle(isMobile),
                 minHeight: '100%',
                 borderRadius: '23px',
                 padding: '28px',

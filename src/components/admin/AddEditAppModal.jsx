@@ -6,10 +6,12 @@ import GlassButton from '../ui/GlassButton';
 import useToastStore from '../../store/useToastStore';
 import {
   uploadImage,
-  uploadMultipleImages
-} from '../../services/cloudinary';
-import { uploadToMega, formatFileSize, isMegaConfigured } from '../../services/megaStorage';
+  uploadMultipleImages,
+  uploadFile,
+  formatFileSize,
+} from '../../services/cloudinaryUpload';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
+import { isGoogleDriveLink } from '../../utils/downloadHelper';
 
 const categories = ['Utility', 'Productivity', 'Tool', 'Game', 'Other'];
 const PLATFORMS = [
@@ -23,7 +25,6 @@ const PLATFORMS = [
 
 export default function AddEditAppModal({ isOpen, onClose, editingApp = null, onRefresh }) {
   const toast = useToastStore();
-  const megaUploadAvailable = isMegaConfigured();
 
   const [form, setForm] = useState({
     name: '', shortDesc: '', longDesc: '', version: '1.0.0',
@@ -44,9 +45,9 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState('idle'); // 'idle' | 'preparing' | 'uploading' | 'done' | 'error'
+  const [uploadStatus, setUploadStatus] = useState('idle');
   const [uploadError, setUploadError] = useState('');
-  const [uploadMode, setUploadMode] = useState('url'); // 'file' or 'url'
+  const [uploadMode, setUploadMode] = useState('file');
   const [uploadedFileUrl, setUploadedFileUrl] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const iconInputRef = useRef(null);
@@ -77,7 +78,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         manualSteps: editingApp.manualSteps || [],
         appFile: null
       });
-      setUploadMode(editingApp.downloadUrl || !megaUploadAvailable ? 'url' : 'file');
+      setUploadMode(editingApp.downloadUrl ? 'url' : 'file');
       setExternalUrl(editingApp.downloadUrl || '');
       setUploadedFileUrl('');
       setUploadStatus('idle');
@@ -98,6 +99,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
         published: true, manualSteps: [], appFile: null
       });
       setExternalUrl('');
+      setUploadMode('file');
       setUploadedFileUrl('');
       setUploadStatus('idle');
       setUploadError('');
@@ -233,68 +235,41 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
 
 
   const uploadAppFileIfNeeded = async () => {
-    if (uploadMode === 'url') {
-      return externalUrl.trim() || null;
-    }
+    if (uploadMode === 'url') return externalUrl.trim() || null;
+    if (uploadStatus === 'done') return uploadedFileUrl;
+    if (!form.appFile) return null;
 
-    if (uploadStatus === 'done') {
-      return uploadedFileUrl;
-    }
+    setUploadStatus('uploading');
+    setUploadError('');
+    setUploadProgress(0);
+    setTotalBytes(form.appFile.size);
+    setPublishStep('Uploading to Cloudinary CDN...');
 
-    if (uploadMode === 'file' && !megaUploadAvailable) {
-      throw new Error('Direct MEGA upload is unavailable on the live site. Use Paste URL with a MEGA share link.');
-    }
-
-    if (uploadMode === 'file' && form.appFile) {
-      setUploadStatus('preparing');
-      setUploadError('');
-      setUploadProgress(0);
-      setUploadedBytes(0);
-      setTotalBytes(form.appFile.size);
-      try {
-        setPublishStep('Connecting to MEGA...');
-
-        const result = await uploadToMega(
-          form.appFile,
-          (percent, loaded, total) => {
-            setUploadStatus('uploading');
-            setUploadProgress(percent);
-            setUploadedBytes(loaded);
-            setTotalBytes(total || form.appFile.size);
-            setFileProgress(percent);
-
-            if (percent < 20) {
-              setPublishStep('Reading file...');
-            } else if (percent < 95) {
-              setPublishStep(`Uploading to MEGA... ${percent}%`);
-            } else if (percent < 100) {
-              setPublishStep('Generating secure link...');
-            } else {
-              setPublishStep('Upload complete!');
-            }
-          }
+    try {
+      const result = await uploadFile(form.appFile, (percent, loaded, total) => {
+        setUploadProgress(percent);
+        setUploadedBytes(loaded);
+        setTotalBytes(total);
+        setFileProgress(percent);
+        setPublishStep(
+          percent >= 100
+            ? 'Finalizing CDN link...'
+            : `Uploading to Cloudinary... ${percent}%`
         );
-        setUploadedFileUrl(result.url);
-        setUploadStatus('done');
-        setPublishStep('');
-        if (!form.fileName) {
-          handleChange('fileName', result.name);
-        }
-        if (!form.fileSize) {
-          handleChange('fileSize', formatFileSize(result.size));
-        }
-        return result.url;
-      } catch (err) {
-        setUploadStatus('error');
-        setUploadProgress(0);
-        setFileProgress(0);
-        setUploadError(err.message || 'Upload failed');
-        setPublishStep('');
-        throw new Error(`Upload failed: ${err.message}`);
-      }
-    }
+      });
 
-    return null;
+      setUploadedFileUrl(result.url);
+      setUploadStatus('done');
+      setPublishStep('');
+      if (!form.fileName) handleChange('fileName', result.name);
+      if (!form.fileSize) handleChange('fileSize', formatFileSize(result.size));
+      return result.url;
+    } catch (err) {
+      setUploadStatus('error');
+      setUploadError(err.message || 'Upload failed');
+      setPublishStep('');
+      throw err;
+    }
   };
 
   const editStep = (index) => {
@@ -337,11 +312,6 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     // Validate
     if (uploadMode === 'url' && !externalUrl.trim()) {
       toast.error('Please provide a download URL');
-      return;
-    }
-    if (uploadMode === 'file' && !megaUploadAvailable) {
-      setUploadMode('url');
-      toast.error('Direct MEGA upload is unavailable on the live site. Use Paste URL with a MEGA share link.');
       return;
     }
     if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
@@ -631,8 +601,8 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
             borderBottom: '1px solid rgba(255,255,255,0.1)',
           }}>
             {[
-              { id: 'file', label: '📁 Upload File' },
-              { id: 'url',  label: '🔗 Paste URL' },
+              { id: 'file', label: 'Upload File' },
+              { id: 'url',  label: 'Paste URL' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -668,52 +638,15 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
               <div>
                 <p style={{
                   margin: '0 0 12px',
-                  color: megaUploadAvailable
-                    ? 'rgba(52,211,153,0.82)'
-                    : 'rgba(251,191,36,0.9)',
+                  color: 'rgba(52,211,153,0.82)',
                   fontSize: '12px',
                   fontWeight: 600,
                 }}>
-                  {megaUploadAvailable
-                    ? 'MEGA cloud upload'
-                    : 'Direct MEGA upload unavailable on GitHub Pages'}
+                  Cloudinary browser upload
                 </p>
-
-                {!megaUploadAvailable && (
-                  <div style={{
-                    padding: '12px 16px',
-                    marginBottom: '12px',
-                    background: 'rgba(251,191,36,0.1)',
-                    border: '1px solid rgba(251,191,36,0.25)',
-                    borderRadius: '12px',
-                    color: '#fcd34d',
-                    fontSize: '13px',
-                    lineHeight: 1.5,
-                  }}>
-                    This site is a public static deployment, so browser-side MEGA credentials cannot be bundled safely.
-                    Use <strong>Paste URL</strong> with a MEGA share link for live uploads.
-                    <button
-                      type="button"
-                      onClick={() => setUploadMode('url')}
-                      style={{
-                        display: 'block',
-                        marginTop: '10px',
-                        background: 'rgba(251,191,36,0.18)',
-                        border: '1px solid rgba(251,191,36,0.25)',
-                        borderRadius: '8px',
-                        color: '#fde68a',
-                        padding: '6px 12px',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Switch to Paste URL
-                    </button>
-                  </div>
-                )}
                 
                 {/* Drop zone */}
-                {uploadStatus === 'idle' && !form.appFile && megaUploadAvailable && (
+                {uploadStatus === 'idle' && !form.appFile && (
                   <label style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -760,7 +693,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        Any size • APK, EXE, ZIP, any format
+                        Any format • Auto chunked for large files
                       </p>
                     </div>
                     <span style={{
@@ -774,11 +707,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       Browse Files
                     </span>
                     <span style={{
-                      color: '#fde68a',
+                      color: '#67e8f9',
                       fontSize: '12px',
                       fontWeight: 600,
                     }}>
-                      ⚡ MEGA Cloud • 20GB Free • No size limit
+                      ☁️ Cloudinary CDN • Direct download
                     </span>
                     <input
                       type="file"
@@ -794,7 +727,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 )}
 
                 {/* File selected — show info */}
-                {form.appFile && uploadStatus === 'idle' && megaUploadAvailable && (
+                {form.appFile && uploadStatus === 'idle' && (
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -832,6 +765,8 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         setUploadStatus('idle');
                         setUploadError('');
                         setUploadProgress(0);
+                        setUploadedBytes(0);
+                        setTotalBytes(0);
                       }}
                       style={{
                         background: 'rgba(248,113,113,0.15)',
@@ -849,7 +784,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 )}
 
                 {/* Uploading state — progress bar */}
-                {(uploadStatus === 'preparing' || uploadStatus === 'uploading') && (
+                {uploadStatus === 'uploading' && (
                   <div style={{ padding: '8px 0' }}>
                     <div style={{
                       display: 'flex',
@@ -860,18 +795,16 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         color: 'rgba(255,255,255,0.7)', 
                         fontSize: '13px' 
                       }}>
-                        {uploadStatus === 'preparing'
-                          ? '📖 Reading file...'
-                          : uploadProgress >= 95
-                            ? '🔗 Generating secure link...'
-                            : `☁️ Uploading to MEGA... ${uploadProgress}%`}
+                        {uploadProgress >= 95
+                          ? '🔗 Finalizing Cloudinary CDN link...'
+                          : `☁️ Uploading to Cloudinary... ${uploadProgress}%`}
                       </span>
                       <span style={{ 
                         color: '#a78bfa', 
                         fontSize: '13px',
                         fontWeight: '600',
                       }}>
-                        {uploadStatus === 'preparing' ? '...' : `${uploadProgress}%`}
+                        {`${uploadProgress}%`}
                       </span>
                     </div>
                     
@@ -884,7 +817,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     }}>
                       <div style={{
                         height: '100%',
-                        width: `${uploadStatus === 'preparing' ? 8 : uploadProgress}%`,
+                        width: `${uploadProgress}%`,
                         background: 
                           'linear-gradient(90deg, #7c3aed, #06b6d4)',
                         borderRadius: '999px',
@@ -899,9 +832,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       marginTop: '6px',
                       textAlign: 'right',
                     }}>
-                      {uploadStatus === 'preparing'
-                        ? `Preparing upload / ${formatFileSize(totalBytes || form.appFile?.size)}`
-                        : `${formatFileSize(uploadedBytes)} / ${formatFileSize(totalBytes || form.appFile?.size)}`}
+                      {`${formatFileSize(uploadedBytes)} / ${formatFileSize(totalBytes || form.appFile?.size)}`}
                     </p>
                   </div>
                 )}
@@ -925,7 +856,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontWeight: '600',
                         margin: '0 0 2px',
                       }}>
-                        ✅ Upload complete!
+                        Upload complete!
                       </p>
                       <p style={{ 
                         color: 'rgba(255,255,255,0.4)',
@@ -944,6 +875,8 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         setUploadError('');
                         setUploadedFileUrl('');
                         setUploadProgress(0);
+                        setUploadedBytes(0);
+                        setTotalBytes(0);
                       }}
                       style={{
                         background: 'transparent',
@@ -970,7 +903,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     color: '#f87171',
                     fontSize: '13px',
                   }}>
-                    ❌ {uploadError || 'MEGA upload failed. Check your MEGA email, password, and network connection.'}
+                    {uploadError || 'Cloudinary upload failed.'}
                     <button
                       type="button"
                       onClick={() => {
@@ -1001,7 +934,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
               <div>
                 <input
                   type="url"
-                  placeholder="https://mega.nz/file/your-shared-file"
+                  placeholder="https://drive.google.com/file/d/... or direct download URL"
                   value={externalUrl}
                   onChange={e => setExternalUrl(e.target.value)}
                   style={{
@@ -1031,6 +964,21 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   </p>
                 )}
 
+                {externalUrl && isGoogleDriveLink(externalUrl) && (
+                  <div style={{
+                    marginTop: '8px',
+                    marginBottom: '12px',
+                    padding: '10px 14px',
+                    background: 'rgba(245,158,11,0.1)',
+                    border: '1px solid rgba(245,158,11,0.3)',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    color: '#fbbf24',
+                  }}>
+                    ⚠️ Google Drive links may cause "parsing" errors on Android. For best results, use Cloudinary upload (Upload File tab) or set file sharing to "Anyone with link" in Drive.
+                  </div>
+                )}
+
                 <div style={{
                   background: 'rgba(124,58,237,0.08)',
                   border: '1px solid rgba(124,58,237,0.2)',
@@ -1047,10 +995,10 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   }}>
                     📌 Share-link workflow:
                   </p>
-                  ☁️ MEGA → Upload file in MEGA → Copy public share link → Paste it here<br/>
-                  ☁️ Google Drive → Upload → Share → Anyone with link<br/>
-                  📁 MediaFire → mediafire.com → Upload → Direct link<br/>
-                  🔥 Mega.nz → mega.nz → Upload → Get link
+                  ☁️ Best results: use Cloudinary upload for direct CDN downloads<br/>
+                  ☁️ Google Drive: share with "Anyone with link" before pasting<br/>
+                  📁 Dropbox / OneDrive links are accepted and normalized on download<br/>
+                  🔗 Direct file URLs work best for external links
                 </div>
               </div>
             )}

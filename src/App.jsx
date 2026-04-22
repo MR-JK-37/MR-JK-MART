@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense } from 'react';
+import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import useAppStore from './store/useAppStore';
@@ -18,7 +18,7 @@ import AdminHomePage from './pages/admin/AdminHomePage';
 import AdminAddAppPage from './pages/admin/AdminAddAppPage';
 import AdminContactsPage from './pages/admin/AdminContactsPage';
 
-import React, { useState } from 'react';
+import React from 'react';
 
 export function ProtectedRoute({ children }) {
   const isAdmin = useAppStore(s => s.isAdmin);

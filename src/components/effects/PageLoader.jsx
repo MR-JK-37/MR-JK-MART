@@ -1,15 +1,18 @@
 import { motion } from 'framer-motion';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export default function PageLoader() {
+  const isMobile = useIsMobile();
+
   return (
     <motion.div
-      initial={{ opacity: 0 }}
+      initial={isMobile ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-[9999] flex flex-col items-center justify-center"
       style={{
         background: 'rgba(10, 14, 26, 0.95)',
-        backdropFilter: 'blur(20px)',
+        backdropFilter: isMobile ? 'none' : 'blur(20px)',
       }}
     >
       <div className="relative flex items-center justify-center mb-6">

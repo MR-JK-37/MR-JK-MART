@@ -10,6 +10,7 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
@@ -128,6 +129,11 @@ body.dark-bg {
 .gradient-border:hover::before {
   opacity: 1;
   filter: blur(0.5px);
+}
+
+.app-card {
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 /* ═══════════════════════════════════════════
@@ -259,6 +265,28 @@ body.dark-bg {
 
 .glass-input::placeholder {
   color: #94a3b8;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.75;
+  }
+}
+
+@media (max-width: 768px) {
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .glass-card {
+    background: rgba(15, 12, 40, 0.92) !important;
+  }
 }
 
 /* ═══════════════════════════════════════════

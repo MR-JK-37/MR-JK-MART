@@ -3,11 +3,13 @@ import { motion } from 'framer-motion';
 import useAppStore from '../store/useAppStore';
 import AppGrid from '../components/apps/AppGrid';
 import SplashPage from './SplashPage';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function IndexPage() {
   const apps = useAppStore(s => s.apps);
   const fetchApps = useAppStore(s => s.fetchApps);
   const loading = useAppStore(s => s.loading);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetchApps();
@@ -23,7 +25,7 @@ export default function IndexPage() {
         {/* Header */}
         <div className="mb-12">
           <motion.h2
-            initial={{ opacity: 0, y: 20 }}
+            initial={isMobile ? false : { opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             className="font-display text-4xl md:text-5xl font-bold mb-3"
@@ -31,10 +33,10 @@ export default function IndexPage() {
             Discover <span className="gradient-text">Apps</span>
           </motion.h2>
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
+            initial={isMobile ? false : { opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ delay: 0.1 }}
+            transition={isMobile ? { duration: 0 } : { delay: 0.1 }}
             className="text-lg opacity-60 font-body"
           >
             Browse and download premium applications by MR!JK!

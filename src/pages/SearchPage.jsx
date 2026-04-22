@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Search, X, ArrowRight } from 'lucide-react';
 import useAppStore from '../store/useAppStore';
 import GlassCard from '../components/ui/GlassCard';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 export default function SearchPage() {
   const [query, setQuery] = useState('');
@@ -11,6 +12,7 @@ export default function SearchPage() {
   const apps = useAppStore(s => s.apps);
   const fetchApps = useAppStore(s => s.fetchApps);
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     fetchApps();
@@ -56,9 +58,9 @@ export default function SearchPage() {
     return (
       <motion.div
         key={app.id}
-        initial={{ opacity: 0, y: 15 }}
+        initial={isMobile ? false : { opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: i * 0.05 }}
+        transition={isMobile ? { duration: 0 } : { delay: i * 0.05 }}
       >
         <GlassCard
           onClick={() => handleAppClick(app.id)}
@@ -69,7 +71,7 @@ export default function SearchPage() {
             style={{ background: iconUrl ? 'transparent' : 'linear-gradient(135deg, #7c3aed, #06b6d4)' }}
           >
             {iconUrl ? (
-              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" />
+              <img src={iconUrl} alt={app.name} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             ) : (
               <span className="text-white font-bold">{app.name?.charAt(0)}</span>
             )}
@@ -86,13 +88,14 @@ export default function SearchPage() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={isMobile ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={isMobile ? { duration: 0 } : undefined}
       exit={{ opacity: 0 }}
       className="max-w-3xl mx-auto px-4 md:px-8 pt-28 pb-16"
     >
       <motion.h1
-        initial={{ opacity: 0, y: 20 }}
+        initial={isMobile ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="font-display text-4xl font-bold mb-8 text-center"
       >
@@ -101,9 +104,9 @@ export default function SearchPage() {
 
       {/* Search Bar */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={isMobile ? false : { opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        transition={isMobile ? { duration: 0 } : { delay: 0.1 }}
         className="relative mb-8"
       >
         <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 opacity-40" />

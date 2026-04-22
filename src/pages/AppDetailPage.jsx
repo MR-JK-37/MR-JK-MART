@@ -7,16 +7,19 @@ import useAppStore from '../store/useAppStore';
 import useToastStore from '../store/useToastStore';
 import { getAppById, incrementDownload, getComments, postComment as addComment, setCommentHidden as hideComment, deleteComment, toggleLike, trackAppView } from '../firebase/appService';
 import { decompressFile } from '../utils/fileCompression';
-import GlassCard from '../components/ui/GlassCard';
 import GlassButton from '../components/ui/GlassButton';
 import PreviewLightbox from '../components/apps/PreviewLightbox';
 import UserManualSection from '../components/apps/UserManualSection';
+import { getDirectDownloadUrl } from '../utils/downloadHelper';
+import { useIsMobile } from '../hooks/useIsMobile';
+import { glassStyle } from '../utils/glassStyle';
 
 export default function AppDetailPage() {
   const { appId } = useParams();
   const isAdmin = useAppStore(s => s.isAdmin);
   const toast = useToastStore();
   const previewStripRef = useRef(null);
+  const isMobile = useIsMobile();
 
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -95,35 +98,46 @@ export default function AppDetailPage() {
   };
 
   const handleDownload = async () => {
-    if (!app?.downloadUrl && !app?.fileData && !app?.fileHandle) {
-      toast.error('No download link available');
+    if (!app?.downloadUrl) {
+      if (app?.fileData || app?.fileHandle) {
+        await handleLegacyDownload();
+        return;
+      }
+      toast.error('No download available');
       return;
+    }
+
+    const directUrl = getDirectDownloadUrl(app.downloadUrl);
+
+    try {
+      await incrementDownload(app.id);
+      setApp((prev) => prev ? { ...prev, downloadCount: (prev.downloadCount || 0) + 1 } : prev);
+    } catch (e) {
+      console.warn('Count error:', e);
     }
 
     setDownloading(true);
     setDownloadStatus('downloading');
 
-    if (app.downloadUrl) {
-      try {
-        await incrementDownload(app.id);
-        setApp((prev) => prev ? { ...prev, downloadCount: (prev.downloadCount || 0) + 1 } : prev);
-      } catch (e) {
-        console.warn('Count update failed:', e);
-      }
+    const a = document.createElement('a');
+    a.href = directUrl;
+    a.download = app.fileName || app.name || 'download';
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 
-      const a = document.createElement('a');
-      a.href = app.downloadUrl;
-      a.download = app.fileName || 'download';
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => {
-        setDownloading(false);
-        setDownloadStatus('idle');
-      }, 3000);
-      return;
-    } else if (app.fileData instanceof ArrayBuffer) {
+    setTimeout(() => {
+      setDownloading(false);
+      setDownloadStatus('idle');
+    }, 3000);
+  };
+
+  const handleLegacyDownload = async () => {
+    setDownloading(true);
+
+    if (app.fileData instanceof ArrayBuffer) {
       setDownloadStatus('preparing');
       let finalBuffer = app.fileData;
       if (app.compressed) {
@@ -282,15 +296,16 @@ export default function AppDetailPage() {
       </div>
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
+        initial={isMobile ? false : { opacity: 0, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
+        transition={isMobile ? { duration: 0 } : undefined}
         exit={{ opacity: 0 }}
         className="max-w-5xl mx-auto px-4 md:px-8 pt-20 pb-16 relative z-10"
       >
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
+          initial={isMobile ? false : { opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 180, damping: 22 }}
+          transition={isMobile ? { duration: 0 } : { type: 'spring', stiffness: 180, damping: 22 }}
           className="liquid-glass detail-hero-card relative overflow-hidden mb-12"
           style={{
             borderRadius: '32px',
@@ -311,7 +326,7 @@ export default function AppDetailPage() {
           <div className="relative z-[1] flex flex-col gap-8">
             <div className="flex flex-col md:flex-row md:items-start gap-6 md:gap-7">
               <motion.div
-                initial={{ scale: 0.92, opacity: 0 }}
+                initial={isMobile ? false : { scale: 0.92, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 className="w-28 h-28 md:w-32 md:h-32 rounded-[28px] overflow-hidden flex-shrink-0"
                 style={{
@@ -370,7 +385,7 @@ export default function AppDetailPage() {
 
                 <div className="mt-6 flex justify-start">
                   <motion.button
-                    whileHover={{ scale: 1.02, filter: 'brightness(1.08)' }}
+                    whileHover={isMobile ? undefined : { scale: 1.02, filter: 'brightness(1.08)' }}
                     whileTap={{ scale: 0.98 }}
                     onClick={handleDownload}
                     disabled={downloading}
@@ -482,11 +497,11 @@ export default function AppDetailPage() {
                     boxShadow: '0 18px 36px rgba(3, 8, 24, 0.24)',
                     cursor: 'pointer',
                   }}
-                  whileHover={{ y: -4, scale: 1.02 }}
+                  whileHover={isMobile ? undefined : { y: -4, scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  initial={{ opacity: 0, x: 24 }}
+                  initial={isMobile ? false : { opacity: 0, x: 24 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.07 }}
+                  transition={isMobile ? { duration: 0 } : { delay: i * 0.07 }}
                   onClick={() => {
                     setActivePreview(i);
                     setLightboxIndex(i);
@@ -511,6 +526,7 @@ export default function AppDetailPage() {
                         objectFit: 'cover',
                       }}
                       loading="lazy"
+                      decoding="async"
                     />
                   </div>
                 </motion.div>
@@ -552,7 +568,7 @@ export default function AppDetailPage() {
       {/* About */}
       <div className="mb-8">
         <h2 className="font-display text-2xl font-bold mb-4">About</h2>
-        <div className="glass p-6 rounded-2xl">
+        <div className="glass glass-card p-6 rounded-2xl" style={glassStyle(isMobile)}>
           <p className="font-body opacity-80 whitespace-pre-wrap leading-relaxed">
             {app.longDesc || app.shortDesc}
           </p>
@@ -601,8 +617,10 @@ export default function AppDetailPage() {
 }
 
 function InfoCard({ icon, label, value }) {
+  const isMobile = useIsMobile();
+
   return (
-    <div className="glass p-4 rounded-xl text-center">
+    <div className="glass glass-card p-4 rounded-xl text-center" style={glassStyle(isMobile)}>
       <div className="flex justify-center mb-2 opacity-50">{icon}</div>
       <p className="text-xs opacity-40 mb-1">{label}</p>
       <p className="text-sm font-semibold truncate">{value}</p>
@@ -611,9 +629,11 @@ function InfoCard({ icon, label, value }) {
 }
 
 function ActionChip({ onClick, icon, label, active = false }) {
+  const isMobile = useIsMobile();
+
   return (
     <motion.button
-      whileHover={{ y: -2 }}
+      whileHover={isMobile ? undefined : { y: -2 }}
       whileTap={{ scale: 0.97 }}
       onClick={onClick}
       className="flex items-center gap-2.5 px-5 py-3 rounded-[18px] transition-all"
@@ -631,25 +651,33 @@ function ActionChip({ onClick, icon, label, active = false }) {
 }
 
 function CommentsModal({ isOpen, onClose, comments, commentCount, userName, setUserName, commentText, setCommentText, onPost, isAdmin, onHide, onDelete }) {
+  const isMobile = useIsMobile();
+
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={isMobile ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[200] flex items-end md:items-center justify-center"
           onClick={onClose}
         >
-          <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.58)', backdropFilter: 'blur(24px)' }} />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'rgba(0,0,0,0.58)',
+              backdropFilter: isMobile ? 'none' : 'blur(24px)',
+            }}
+          />
 
           <motion.div
-            initial={{ y: '100%', opacity: 0, scale: 0.92 }}
+            initial={isMobile ? false : { y: '100%', opacity: 0, scale: 0.92 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: '100%', opacity: 0, scale: 0.92 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            exit={isMobile ? { opacity: 0 } : { y: '100%', opacity: 0, scale: 0.92 }}
+            transition={isMobile ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 30 }}
             className="relative liquid-glass w-full md:max-w-lg md:rounded-2xl rounded-t-3xl overflow-hidden"
-            style={{ maxHeight: '80vh' }}
+            style={{ ...glassStyle(isMobile), maxHeight: '80vh' }}
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}

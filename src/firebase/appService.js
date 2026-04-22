@@ -89,21 +89,30 @@ export async function trackAppView(appId) {
 
 export async function trackSiteVisit() {
   try {
-    await setDoc(
-      doc(db, 'settings', 'siteStats'),
-      { totalViews: increment(1) },
-      { merge: true }
-    );
+    const ref = doc(db, 'settings', 'siteStats');
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      await updateDoc(ref, { totalViews: increment(1) });
+    } else {
+      await setDoc(ref, { totalViews: 1 });
+    }
   } catch (e) {
-    console.warn('Site visit track failed:', e);
+    console.warn('trackSiteVisit error:', e);
   }
 }
 
 export async function getSiteStats() {
   try {
     const snap = await getDoc(doc(db, 'settings', 'siteStats'));
-    return snap.exists() ? snap.data() : { totalViews: 0 };
+    if (snap.exists()) {
+      return snap.data();
+    }
+    await setDoc(doc(db, 'settings', 'siteStats'), {
+      totalViews: 0,
+    });
+    return { totalViews: 0 };
   } catch (e) {
+    console.error('getSiteStats error:', e);
     return { totalViews: 0 };
   }
 }

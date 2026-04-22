@@ -1,9 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useIsMobile } from '../../hooks/useIsMobile';
 
 export default function PreviewLightbox({ images = [], initialIndex = 0, isOpen, onClose }) {
   const [current, setCurrent] = useState(initialIndex);
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    setCurrent(initialIndex);
+  }, [initialIndex, isOpen]);
 
   const next = (e) => {
     e?.stopPropagation();
@@ -19,12 +25,12 @@ export default function PreviewLightbox({ images = [], initialIndex = 0, isOpen,
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          initial={{ opacity: 0 }}
+          initial={isMobile ? false : { opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[300] flex items-center justify-center"
           onClick={onClose}
-          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)' }}
+          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: isMobile ? 'none' : 'blur(20px)' }}
         >
           {/* Close */}
           <button
@@ -55,10 +61,10 @@ export default function PreviewLightbox({ images = [], initialIndex = 0, isOpen,
           {/* Image */}
           <motion.img
             key={current}
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={isMobile ? false : { scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 200 }}
+            exit={isMobile ? { opacity: 0 } : { scale: 0.8, opacity: 0 }}
+            transition={isMobile ? { duration: 0 } : { type: 'spring', stiffness: 200 }}
             src={images[current]}
             alt={`Preview ${current + 1}`}
             className="max-w-[90vw] max-h-[80vh] rounded-2xl object-contain"
