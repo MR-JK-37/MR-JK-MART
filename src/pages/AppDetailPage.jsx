@@ -10,7 +10,12 @@ import { decompressFile } from '../utils/fileCompression';
 import GlassButton from '../components/ui/GlassButton';
 import PreviewLightbox from '../components/apps/PreviewLightbox';
 import UserManualSection from '../components/apps/UserManualSection';
-import { getDirectDownloadUrl } from '../utils/downloadHelper';
+import {
+  getDirectDownloadUrl,
+  isMegaFileLink,
+  isMegaFolderLink,
+  isMegaLink,
+} from '../utils/downloadHelper';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { glassStyle } from '../utils/glassStyle';
 
@@ -117,12 +122,58 @@ export default function AppDetailPage() {
     }
 
     setDownloading(true);
+    setDownloadStatus('preparing');
+
+    if (isMegaFolderLink(app.downloadUrl)) {
+      setDownloading(false);
+      setDownloadStatus('idle');
+      toast.error('MEGA folder links cannot be downloaded directly here. Paste a MEGA file link instead.');
+      return;
+    }
+
+    if (isMegaFileLink(app.downloadUrl)) {
+      try {
+        const { File } = await import('megajs');
+        const megaFile = File.fromURL(app.downloadUrl);
+
+        // Recommended by mega.js for browser usage.
+        megaFile.api.userAgent = null;
+
+        await megaFile.loadAttributes();
+        setDownloadStatus('downloading');
+
+        const data = await megaFile.downloadBuffer({ forceHttps: true });
+        const blob = new Blob([data], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+
+        link.href = url;
+        link.download = app.fileName || megaFile.name || app.name || 'download';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        setTimeout(() => {
+          setDownloading(false);
+          setDownloadStatus('idle');
+        }, 1500);
+        return;
+      } catch (error) {
+        console.error('MEGA direct download failed:', error);
+        setDownloading(false);
+        setDownloadStatus('idle');
+        toast.error('MEGA direct download failed. Check that this is a public MEGA file link.');
+        return;
+      }
+    }
+
     setDownloadStatus('downloading');
 
     const a = document.createElement('a');
     a.href = directUrl;
     a.download = app.fileName || app.name || 'download';
-    a.target = '_blank';
+    a.target = isMegaLink(app.downloadUrl) ? '_self' : '_blank';
     a.rel = 'noopener noreferrer';
     document.body.appendChild(a);
     a.click();

@@ -1005,7 +1005,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
               <div>
                 <input
                   type="url"
-                  placeholder="https://drive.google.com/file/d/... or direct download URL"
+                  placeholder="https://mega.nz/file/... or other public file URL"
                   value={externalUrl}
                   onChange={e => setExternalUrl(e.target.value)}
                   style={{
@@ -1068,6 +1068,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   </p>
                   ☁️ Use Cloudinary upload for images, videos, and small files only<br/>
                   📦 APK / EXE / ZIP files above 10 MB should use a hosted share link<br/>
+                  ⚡ Public MEGA file links now download directly from this site<br/>
                   ☁️ Google Drive: share with "Anyone with link" before pasting<br/>
                   📁 Dropbox / OneDrive links are accepted and normalized on download<br/>
                   🐙 GitHub Releases links also work well for large app downloads<br/>

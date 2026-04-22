@@ -27,3 +27,19 @@ export function getDirectDownloadUrl(url) {
 export function isGoogleDriveLink(url) {
   return Boolean(url && url.includes('drive.google.com'));
 }
+
+export function isMegaLink(url) {
+  return Boolean(url && /https?:\/\/mega\.(nz|io)\//i.test(url));
+}
+
+export function isMegaFileLink(url) {
+  return Boolean(
+    url && /https?:\/\/mega\.(nz|io)\/(file\/|#!)/i.test(url)
+  );
+}
+
+export function isMegaFolderLink(url) {
+  return Boolean(
+    url && /https?:\/\/mega\.(nz|io)\/(folder\/|#F!)/i.test(url)
+  );
+}
