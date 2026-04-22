@@ -1,6 +1,11 @@
 const CLOUD_NAME = 'desi8fsoe';
 const UPLOAD_PRESET = 'mrjk_mart';
 const CHUNK_SIZE = 6 * 1024 * 1024;
+const FREE_PLAN_LIMITS = {
+  image: 10 * 1024 * 1024,
+  raw: 10 * 1024 * 1024,
+  video: 100 * 1024 * 1024,
+};
 
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'avif', 'bmp'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'webm', 'm4v'];
@@ -19,6 +24,33 @@ export function getResourceType(file) {
   if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
   if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
   return 'raw';
+}
+
+export function getCloudinaryUploadLimit(file) {
+  const resourceType = typeof file === 'string' ? file : getResourceType(file);
+  return {
+    resourceType,
+    maxBytes: FREE_PLAN_LIMITS[resourceType] || FREE_PLAN_LIMITS.raw,
+  };
+}
+
+export function getCloudinaryUploadLimitError(file) {
+  if (!file) return null;
+
+  const { resourceType, maxBytes } = getCloudinaryUploadLimit(file);
+  if (file.size <= maxBytes) return null;
+
+  const kind = resourceType === 'video' ? 'video' : 'raw';
+  const guidance =
+    kind === 'video'
+      ? 'Use a smaller video file or upgrade the Cloudinary plan for larger uploads.'
+      : 'Use Paste URL for large APK/EXE/ZIP files (GitHub Releases, Drive, Dropbox, OneDrive) or upgrade the Cloudinary plan.';
+
+  return {
+    resourceType,
+    maxBytes,
+    message: `Cloudinary ${kind} uploads on the current free plan are limited to ${formatFileSize(maxBytes)}. "${file.name}" is ${formatFileSize(file.size)}. ${guidance}`,
+  };
 }
 
 function uploadDirect(file, resourceType, onProgress) {
@@ -122,6 +154,11 @@ async function uploadChunked(file, resourceType, onProgress) {
 }
 
 export async function uploadFile(file, onProgress) {
+  const limitError = getCloudinaryUploadLimitError(file);
+  if (limitError) {
+    throw new Error(limitError.message);
+  }
+
   const resourceType = getResourceType(file);
   if (file.size < 95 * 1024 * 1024) {
     return uploadDirect(file, resourceType, onProgress);

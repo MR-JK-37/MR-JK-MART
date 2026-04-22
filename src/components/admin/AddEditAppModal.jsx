@@ -9,6 +9,8 @@ import {
   uploadMultipleImages,
   uploadFile,
   formatFileSize,
+  getCloudinaryUploadLimit,
+  getCloudinaryUploadLimitError,
 } from '../../services/cloudinaryUpload';
 import { createApp, updateApp as updateFirebaseApp } from '../../firebase/appService';
 import { isGoogleDriveLink } from '../../utils/downloadHelper';
@@ -231,6 +233,12 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     // Auto-fill filename and size
     handleChange('fileName', file.name);
     handleChange('fileSize', formatFileSize(file.size));
+
+    const limitError = getCloudinaryUploadLimitError(file);
+    if (limitError) {
+      setUploadStatus('error');
+      setUploadError(limitError.message);
+    }
   };
 
 
@@ -317,6 +325,16 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
     if (uploadMode === 'file' && !appFile && uploadStatus !== 'done') {
       toast.error('Please select a file to upload');
       return;
+    }
+
+    if (uploadMode === 'file' && appFile) {
+      const limitError = getCloudinaryUploadLimitError(appFile);
+      if (limitError) {
+        setUploadStatus('error');
+        setUploadError(limitError.message);
+        toast.error('This file is too large for Cloudinary on the current plan. Use Paste URL instead.');
+        return;
+      }
     }
 
     setPublishing(true);
@@ -636,15 +654,40 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
             {/* FILE UPLOAD TAB */}
             {uploadMode === 'file' && (
               <div>
-                <p style={{
-                  margin: '0 0 12px',
-                  color: 'rgba(52,211,153,0.82)',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}>
-                  Cloudinary browser upload
-                </p>
-                
+                {(() => {
+                  const { resourceType, maxBytes } = form.appFile
+                    ? getCloudinaryUploadLimit(form.appFile)
+                    : { resourceType: 'raw', maxBytes: 10 * 1024 * 1024 };
+
+                  return (
+                    <div style={{
+                      marginBottom: '14px',
+                      padding: '10px 14px',
+                      background: 'rgba(6,182,212,0.08)',
+                      border: '1px solid rgba(6,182,212,0.18)',
+                      borderRadius: '12px',
+                    }}>
+                      <p style={{
+                        margin: '0 0 6px',
+                        color: '#67e8f9',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}>
+                        Cloudinary browser upload
+                      </p>
+                      <p style={{
+                        margin: 0,
+                        color: 'rgba(255,255,255,0.58)',
+                        fontSize: '12px',
+                        lineHeight: 1.55,
+                      }}>
+                        Current Cloudinary free-plan limits: images/raw files up to 10 MB, videos up to 100 MB.
+                        Large APK, EXE, ZIP, and other app binaries count as {resourceType === 'video' ? 'video' : 'raw'} files here, so use Paste URL for anything above {formatFileSize(maxBytes)}.
+                      </p>
+                    </div>
+                  );
+                })()}
+
                 {/* Drop zone */}
                 {uploadStatus === 'idle' && !form.appFile && (
                   <label style={{
@@ -693,7 +736,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                         fontSize: '13px',
                         margin: 0
                       }}>
-                        Any format • Auto chunked for large files
+                        Best for images, videos, and small app files
                       </p>
                     </div>
                     <span style={{
@@ -711,7 +754,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                       fontSize: '12px',
                       fontWeight: 600,
                     }}>
-                      ☁️ Cloudinary CDN • Direct download
+                      ☁️ Cloudinary CDN • Not for large raw app packages
                     </span>
                     <input
                       type="file"
@@ -727,7 +770,7 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                 )}
 
                 {/* File selected — show info */}
-                {form.appFile && uploadStatus === 'idle' && (
+                {form.appFile && uploadStatus !== 'uploading' && uploadStatus !== 'done' && (
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -904,26 +947,54 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                     fontSize: '13px',
                   }}>
                     {uploadError || 'Cloudinary upload failed.'}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setUploadStatus('idle');
-                        setUploadError('');
-                      }}
-                      style={{
-                        display: 'block',
-                        marginTop: '8px',
-                        background: 'rgba(248,113,113,0.2)',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: '#f87171',
-                        padding: '4px 12px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                      }}
-                    >
-                      Try Again
-                    </button>
+                    <div style={{
+                      display: 'flex',
+                      gap: '8px',
+                      marginTop: '10px',
+                      flexWrap: 'wrap',
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadMode('url');
+                          setUploadStatus('idle');
+                          setUploadError('');
+                        }}
+                        style={{
+                          background: 'rgba(124,58,237,0.24)',
+                          border: '1px solid rgba(124,58,237,0.35)',
+                          borderRadius: '6px',
+                          color: '#c4b5fd',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                        }}
+                      >
+                        Use Paste URL
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setForm(p => ({ ...p, appFile: null }));
+                          setUploadStatus('idle');
+                          setUploadError('');
+                          setUploadProgress(0);
+                          setUploadedBytes(0);
+                          setTotalBytes(0);
+                        }}
+                        style={{
+                          background: 'rgba(248,113,113,0.2)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: '#f87171',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                        }}
+                      >
+                        Choose Another File
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -995,9 +1066,11 @@ export default function AddEditAppModal({ isOpen, onClose, editingApp = null, on
                   }}>
                     📌 Share-link workflow:
                   </p>
-                  ☁️ Best results: use Cloudinary upload for direct CDN downloads<br/>
+                  ☁️ Use Cloudinary upload for images, videos, and small files only<br/>
+                  📦 APK / EXE / ZIP files above 10 MB should use a hosted share link<br/>
                   ☁️ Google Drive: share with "Anyone with link" before pasting<br/>
                   📁 Dropbox / OneDrive links are accepted and normalized on download<br/>
+                  🐙 GitHub Releases links also work well for large app downloads<br/>
                   🔗 Direct file URLs work best for external links
                 </div>
               </div>
