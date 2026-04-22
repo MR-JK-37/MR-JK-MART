@@ -30,6 +30,7 @@ export default function AppDetailPage() {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState('idle');
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -123,6 +124,7 @@ export default function AppDetailPage() {
 
     setDownloading(true);
     setDownloadStatus('preparing');
+    setDownloadProgress(0);
 
     if (isMegaFolderLink(app.downloadUrl)) {
       setDownloading(false);
@@ -132,37 +134,83 @@ export default function AppDetailPage() {
     }
 
     if (isMegaFileLink(app.downloadUrl)) {
+      let fileWriter = null;
       try {
         const { File } = await import('megajs');
         const megaFile = File.fromURL(app.downloadUrl);
+        const suggestedName = app.fileName || app.name || 'download';
 
         // Recommended by mega.js for browser usage.
         megaFile.api.userAgent = null;
 
+        if ('showSaveFilePicker' in window) {
+          try {
+            const handle = await window.showSaveFilePicker({
+              suggestedName,
+            });
+            fileWriter = await handle.createWritable();
+          } catch (pickerError) {
+            setDownloading(false);
+            setDownloadStatus('idle');
+            setDownloadProgress(0);
+            return;
+          }
+        }
+
         await megaFile.loadAttributes();
+
         setDownloadStatus('downloading');
 
-        const data = await megaFile.downloadBuffer({ forceHttps: true });
-        const blob = new Blob([data], { type: 'application/octet-stream' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
+        const stream = megaFile.download({ forceHttps: true });
+        const chunks = [];
+        let loadedBytes = 0;
+        const totalBytes = megaFile.size || 0;
 
-        link.href = url;
-        link.download = app.fileName || megaFile.name || app.name || 'download';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        for await (const chunk of stream) {
+          const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+          loadedBytes += bytes.length;
 
-        setTimeout(() => URL.revokeObjectURL(url), 30_000);
-        setTimeout(() => {
-          setDownloading(false);
-          setDownloadStatus('idle');
-        }, 1500);
+          if (totalBytes > 0) {
+            setDownloadProgress(Math.min(100, Math.round((loadedBytes / totalBytes) * 100)));
+          }
+
+          if (fileWriter) {
+            await fileWriter.write(bytes);
+          } else {
+            chunks.push(bytes);
+          }
+        }
+
+        if (fileWriter) {
+          await fileWriter.close();
+        } else {
+          const blob = new Blob(chunks, { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+
+          link.href = url;
+          link.download = megaFile.name || suggestedName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          setTimeout(() => URL.revokeObjectURL(url), 30_000);
+        }
+
+        setDownloadStatus('idle');
+        setDownloading(false);
+        setDownloadProgress(0);
         return;
       } catch (error) {
         console.error('MEGA direct download failed:', error);
+        try {
+          if (fileWriter) {
+            await fileWriter.abort();
+          }
+        } catch {}
         setDownloading(false);
         setDownloadStatus('idle');
+        setDownloadProgress(0);
         toast.error('MEGA direct download failed. Check that this is a public MEGA file link.');
         return;
       }
@@ -182,6 +230,7 @@ export default function AppDetailPage() {
     setTimeout(() => {
       setDownloading(false);
       setDownloadStatus('idle');
+      setDownloadProgress(0);
     }, 3000);
   };
 
@@ -468,7 +517,13 @@ export default function AppDetailPage() {
                       ) : (
                         <div className="flex items-center gap-3 px-6 text-white font-semibold text-base">
                           <div className="loader-ring w-5 h-5 border-2" />
-                          <span>{downloadStatus === 'downloading' ? 'Starting download...' : `${downloadStatus.charAt(0).toUpperCase()}${downloadStatus.slice(1)}...`}</span>
+                          <span>
+                            {downloadStatus === 'downloading'
+                              ? downloadProgress > 0
+                                ? `Downloading... ${downloadProgress}%`
+                                : 'Starting download...'
+                              : `${downloadStatus.charAt(0).toUpperCase()}${downloadStatus.slice(1)}...`}
+                          </span>
                         </div>
                       )}
                     </div>
